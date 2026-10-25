@@ -39,6 +39,7 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(double h264MaxFps READ h264MaxFps NOTIFY recordingCapabilitiesChanged)
     Q_PROPERTY(QString tuningFile READ tuningFile NOTIFY tuningFileChanged)
     Q_PROPERTY(QString rawBitDepth READ rawBitDepth NOTIFY rawBitDepthChanged)
+    Q_PROPERTY(bool clearHdr READ clearHdr NOTIFY clearHdrChanged)
     Q_PROPERTY(QString h264Resolution READ h264Resolution NOTIFY h264ResolutionChanged)
     Q_PROPERTY(QString sensorName READ sensorName NOTIFY sensorNameChanged)
     Q_PROPERTY(QString autofocusMode READ autofocusMode NOTIFY autofocusModeChanged)
@@ -86,6 +87,7 @@ public:
     double h264MaxFps() const { return m_h264MaxFps; }
     QString tuningFile() const { return m_tuningFile; }
     QString rawBitDepth() const;
+    bool clearHdr() const { return m_clearHdr; }
     QString h264Resolution() const;
     QString sensorName() const;
     QString autofocusMode() const;
@@ -123,6 +125,7 @@ public:
     Q_INVOKABLE bool applyCdngCompression(const QString &value);
     Q_INVOKABLE bool applyTuningFile(const QString &path);
     Q_INVOKABLE bool applyRawBitDepth(const QString &displayValue);
+    Q_INVOKABLE bool applyClearHdr(bool enabled);
     Q_INVOKABLE bool applyH264Resolution(const QString &displayValue);
     Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusMode(const QString &displayValue);
@@ -161,6 +164,7 @@ signals:
     void recordingCapabilitiesChanged();
     void tuningFileChanged();
     void rawBitDepthChanged();
+    void clearHdrChanged();
     void h264ResolutionChanged();
     void sensorNameChanged();
     void autofocusModeChanged();
@@ -254,6 +258,7 @@ private:
     void setCdngPreviewColorProfileValue(const QString &value);
     void setTuningFileValue(const QString &value);
     void setRawBitDepthValue(const QString &value);
+    void setClearHdrValue(bool value);
     void setH264ResolutionValue(const QString &value);
     void setSensorNameValue(const QString &value);
     void setAutofocusModeValue(const QString &value);
@@ -290,6 +295,7 @@ private:
     QVariantMap m_previewExposureReference;
     QString m_tuningFile;
     QString m_rawBitDepth = QStringLiteral("12-bit");
+    bool m_clearHdr = false;
     QString m_h264Resolution = QStringLiteral("Match Capture");
     QString m_sensorName = QStringLiteral("Unknown");
     QString m_autofocusMode = QStringLiteral("Continuous");

@@ -450,7 +450,12 @@ Item {
     readonly property var imx585ActiveCropOptions: root.imx585FourKSelected ? root.imx585CropRatioOptions : root.imx585FullHdCropRatioOptions
     readonly property bool imx477FourKSelected: root.isImx477FourKResolution(root.resolution)
     readonly property bool sensorCropControlsAvailable: root.imx585Detected || root.imx477Detected || root.imx294Detected
+    // 4K Clear HDR (IMX585, cDNG/MLV video) is a resolution choice of its own: Core forces 4K, no crops.
+    readonly property bool clearHdrActive: !!root.controlBridge && root.controlBridge.clearHdr
+    readonly property bool clearHdrAvailable: root.imx585Detected && !root.photoModeEnabled
+                                              && (root.recordingFormat === "cDNG" || root.recordingFormat === "MLV")
     readonly property bool cropControlsVisible: root.processedVideoRecordFormat || root.sensorCropControlsAvailable
+    readonly property bool cropControlsEnabled: root.processedVideoRecordFormat || !root.clearHdrActive
     readonly property var sensorBaseResolutionOptions: root.imx294Detected ? root.imx294BaseResolutionOptions
                                                       : root.imx477Detected ? root.imx477BaseResolutionOptions : root.imx585BaseResolutionOptions
     readonly property var sensorActiveCropOptions: root.sensorCropControlsAvailable
@@ -1230,6 +1235,18 @@ function applyResolutionBase(resolutionValue) {
         return
     }
     root.applyResolutionValue(resolutionValue)
+}
+
+// "clearhdr" turns 4K Clear HDR on; any other resolution turns it off first.
+function applyQuickResolution(resolutionValue) {
+    if (resolutionValue === "clearhdr") {
+        if (root.controlBridge && !root.clearHdrActive)
+            root.controlBridge.applyClearHdr(true)
+        return
+    }
+    if (root.clearHdrActive && root.controlBridge)
+        root.controlBridge.applyClearHdr(false)
+    root.applyResolutionBase(resolutionValue)
 }
 
 function applyCropResolution(resolutionValue) {
@@ -3214,7 +3231,8 @@ Text {
                                 }
 
                                 Text {
-                                    text: root.cropControlsVisible ? root.resolutionBaseLabel : root.resolution
+                                    text: root.clearHdrActive ? "4K Clear HDR"
+                                          : (root.cropControlsVisible ? root.resolutionBaseLabel : root.resolution)
                                     color: "white"
                                     font.family: interMedium.font.family
                                     font.pixelSize: root.quickMenuResolutionValueFontSize
@@ -3288,6 +3306,8 @@ Text {
                                                ? root.safeOptionList(root.processedVideoRecordFormat
                                                                      ? root.h264BaseResolutionOptions
                                                                      : (root.sensorCropControlsAvailable ? root.sensorBaseResolutionOptions : root.resolutionOptions))
+                                                 .concat(root.imx585Detected ? [{ value: "clearhdr", label: "4K Clear HDR",
+                                                                                  enabled: root.clearHdrAvailable }] : [])
                                                : []
 
                                         delegate: Rectangle {
@@ -3298,7 +3318,12 @@ Text {
                                             width: quickResolutionOptions.width
                                             height: root.quickMenuPopupOptionHeight
                                             radius: 12
-                                            color: root.fadedControlColor(itemValue === root.resolutionBaseValue ? "#22ffffff" : "transparent")
+                                            readonly property bool itemEnabled: modelData.enabled !== false
+                                            readonly property bool itemSelected: itemValue === "clearhdr"
+                                                                                 ? root.clearHdrActive
+                                                                                 : (!root.clearHdrActive && itemValue === root.resolutionBaseValue)
+                                            color: root.fadedControlColor(itemSelected ? "#22ffffff" : "transparent")
+                                            opacity: itemEnabled ? 1.0 : 0.4
 
                                             Text {
                                                 anchors.centerIn: parent
@@ -3311,8 +3336,9 @@ Text {
 
                                             MouseArea {
                                                 anchors.fill: parent
+                                                enabled: parent.itemEnabled
                                                 onClicked: {
-                                                    root.applyResolutionBase(parent.itemValue)
+                                                    root.applyQuickResolution(parent.itemValue)
                                                     root.quickMenuResolutionOpen = false
                                                     root.quickMenuFieldOpen = ""
                                                 }
@@ -3331,6 +3357,7 @@ Text {
                         width: root.cropControlsVisible ? quickResolutionRow.fieldWidth : 0
                         height: root.cropControlsVisible ? root.quickMenuResolutionHeight : 0
                         visible: root.cropControlsVisible
+                        opacity: root.cropControlsEnabled ? 1.0 : 0.4
                         z: root.quickMenuFieldOpen === "crop" ? 29 : 9
 
                         Rectangle {
@@ -3380,7 +3407,7 @@ Text {
                             MouseArea {
                                 id: quickCropArea
                                 anchors.fill: parent
-                                enabled: root.cropControlsVisible
+                                enabled: root.cropControlsVisible && root.cropControlsEnabled
                                 onClicked: {
                                     root.openDropdown = ""
                                     if (root.quickMenuFieldOpen === "crop") {

@@ -582,7 +582,7 @@ bool ApertarControlBridge::applyRawBitDepth(const QString &displayValue)
     }
 
     const int bitDepth = parseRawBitDepthValue(displayValue);
-    if (bitDepth != 8 && bitDepth != 10 && bitDepth != 12) {
+    if (bitDepth != 8 && bitDepth != 10 && bitDepth != 12 && bitDepth != 16) {
         setLastError(QStringLiteral("Invalid raw bit depth value."));
         return false;
     }
@@ -595,6 +595,19 @@ bool ApertarControlBridge::applyRawBitDepth(const QString &displayValue)
 
     setRawBitDepthValue(formatRawBitDepthValue(bitDepth));
     saveCurrentCameraSettings();
+    return true;
+}
+
+bool ApertarControlBridge::applyClearHdr(bool enabled)
+{
+    // Core restarts the camera, forces 4K and settles the bit depth; the settings event brings those back.
+    if (!sendCoreCommand(QStringLiteral("set_clear_hdr"), {
+            { QStringLiteral("enabled"), enabled ? QStringLiteral("true") : QStringLiteral("false") }
+        })) {
+        return false;
+    }
+
+    setClearHdrValue(enabled);
     return true;
 }
 
@@ -1016,6 +1029,7 @@ bool ApertarControlBridge::sendCoreCommand(const QString &commandName, const QJs
     const bool reconfigureCommand = commandName == QStringLiteral("set_resolution") ||
                                     commandName == QStringLiteral("set_capture_mode") ||
                                     commandName == QStringLiteral("set_raw_bit_depth") ||
+                                    commandName == QStringLiteral("set_clear_hdr") ||
                                     commandName == QStringLiteral("set_record_format") ||
                                     commandName == QStringLiteral("set_tuning_file") ||
                                     commandName == QStringLiteral("set_prores_color_profile") ||
@@ -1449,6 +1463,9 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
     if (state.contains(QStringLiteral("raw_bit_depth")))
         setRawBitDepthValue(formatRawBitDepthValue(state.value(QStringLiteral("raw_bit_depth")).toInt(12)));
 
+    if (state.contains(QStringLiteral("clear_hdr")))
+        setClearHdrValue(state.value(QStringLiteral("clear_hdr")).toBool(false));
+
     if (state.contains(QStringLiteral("h264_width")) && state.contains(QStringLiteral("h264_height"))) {
         setH264ResolutionValue(formatH264ResolutionValue(
             state.value(QStringLiteral("h264_width")).toInt(0),
@@ -1712,6 +1729,8 @@ QString ApertarControlBridge::formatRawBitDepthValue(int value) const
 {
     if (value == 8)
         return QStringLiteral("8-bit");
+    if (value == 16)
+        return QStringLiteral("16-bit");
     return value == 10 ? QStringLiteral("10-bit") : QStringLiteral("12-bit");
 }
 
@@ -2102,6 +2121,8 @@ int ApertarControlBridge::parseRawBitDepthValue(const QString &displayValue) con
     const int parsed = normalized.toInt();
     if (parsed == 8)
         return 8;
+    if (parsed == 16)
+        return 16;
     return parsed == 10 ? 10 : 12;
 }
 
@@ -2323,6 +2344,15 @@ void ApertarControlBridge::setTuningFileValue(const QString &value)
 
     m_tuningFile = normalized;
     emit tuningFileChanged();
+}
+
+void ApertarControlBridge::setClearHdrValue(bool value)
+{
+    if (m_clearHdr == value)
+        return;
+
+    m_clearHdr = value;
+    emit clearHdrChanged();
 }
 
 void ApertarControlBridge::setRawBitDepthValue(const QString &value)

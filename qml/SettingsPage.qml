@@ -99,6 +99,12 @@ Item {
                                            ? apertarControlBridge.recordingFormat
                                            : "cDNG"
     readonly property bool cdngRecordFormat: root.recordFormat === "cDNG"
+    // 4K Clear HDR (IMX585, cDNG/MLV video) is a resolution choice of its own: Core forces 4K, no crops,
+    // and the bit depth is 12 or 16.
+    readonly property bool clearHdrActive: typeof apertarControlBridge !== "undefined" && !!apertarControlBridge
+                                           && apertarControlBridge.clearHdr
+    readonly property bool clearHdrAvailable: root.imx585Detected && !root.stillCaptureMode
+                                              && (root.recordFormat === "cDNG" || root.recordFormat === "MLV")
     readonly property bool stillCaptureMode: root.settingsState && root.settingsState.photoModeEnabled
     readonly property bool h264RecordFormat: !root.stillCaptureMode && root.recordFormat === "H.264"
     readonly property bool proresRecordFormat: root.recordFormat.indexOf("ProRes") === 0
@@ -648,6 +654,10 @@ Item {
     function rawBitDepthOptionEnabled(value) {
         if (root.processedVideoRecordFormat)
             return false
+        if (value === "16-bit")
+            return root.clearHdrActive
+        if (root.clearHdrActive)
+            return value === "12-bit"
         if (value === "12-bit")
             return true
         if (value === "10-bit")
@@ -3154,14 +3164,27 @@ Item {
 
                     width: (parent.width - 12) / 2
                     label: root.processedVideoRecordFormat ? root.processedVideoSizeLabel : "Resolution"
-                    value: (root.processedVideoRecordFormat || root.sensorCropControlsAvailable) ? root.recordResolutionBaseValue : root.recordResolution
-                    displayValue: (root.processedVideoRecordFormat || root.sensorCropControlsAvailable) ? root.recordResolutionBaseLabel : root.recordResolution
+                    value: root.clearHdrActive ? "clearhdr"
+                           : ((root.processedVideoRecordFormat || root.sensorCropControlsAvailable) ? root.recordResolutionBaseValue : root.recordResolution)
+                    displayValue: root.clearHdrActive ? "4K Clear HDR"
+                                  : ((root.processedVideoRecordFormat || root.sensorCropControlsAvailable) ? root.recordResolutionBaseLabel : root.recordResolution)
                     options: root.safeOptionList(root.processedVideoRecordFormat
                                                  ? root.h264BaseResolutionOptions
                                                  : (root.sensorCropControlsAvailable ? root.sensorBaseResolutionOptions : root.resolutionOptions))
+                             .concat(root.imx585Detected ? [{ value: "clearhdr", label: "4K Clear HDR",
+                                                              enabled: root.clearHdrAvailable }] : [])
                     popupParent: dropdownOverlay
                     dropdownController: sharedDropdownController
                     onValueSelected: function(v) {
+                        if (v === "clearhdr") {
+                            if (!root.clearHdrAvailable)
+                                return
+                            if (!root.clearHdrActive)
+                                apertarControlBridge.applyClearHdr(true)
+                            return
+                        }
+                        if (root.clearHdrActive)
+                            apertarControlBridge.applyClearHdr(false)
                         if (root.processedVideoRecordFormat) {
                             apertarControlBridge.applyH264Resolution(root.h264ResolutionForBaseAndRatio(v, root.h264CropRatioLabel))
                             return
@@ -3180,7 +3203,7 @@ Item {
                     value: root.recordCropModeValue
                     displayValue: root.recordCropRatioLabel
                     options: root.safeOptionList(root.processedVideoRecordFormat ? root.h264ActiveCropOptions : root.sensorActiveCropOptions)
-                    fieldEnabled: root.processedVideoRecordFormat || root.sensorCropControlsAvailable
+                    fieldEnabled: root.processedVideoRecordFormat || (root.sensorCropControlsAvailable && !root.clearHdrActive)
                     popupParent: dropdownOverlay
                     dropdownController: sharedDropdownController
                     onValueSelected: function(v) {
@@ -3223,6 +3246,7 @@ Item {
                         { value: "lt", label: "LT" },
                         { value: "proxy", label: "Proxy" }
                     ] : [
+                        { value: "16-bit", label: "16-bit", enabled: root.rawBitDepthOptionEnabled("16-bit") },
                         { value: "12-bit", label: "12-bit", enabled: root.rawBitDepthOptionEnabled("12-bit") },
                         { value: "10-bit", label: "10-bit", enabled: root.rawBitDepthOptionEnabled("10-bit") },
                         { value: "8-bit", label: "8-bit", enabled: root.rawBitDepthOptionEnabled("8-bit") }
