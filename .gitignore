@@ -1,0 +1,7 @@
+# Build output. Upstream commits its build/ tree; this fork does not, so a
+# rebuild on the Pi leaves git status clean. See apertar-kb/MANUAL.
+build/
+
+# Editor state differs per machine (Mac vs Pi).
+.vscode/
+*.code-workspace
