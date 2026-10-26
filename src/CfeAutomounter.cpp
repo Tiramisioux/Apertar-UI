@@ -546,6 +546,8 @@ public:
                 const bool eject = buttons->second;
                 if (lastInsert && !insert && !m_mounted)
                     mountPcie();
+                if (!lastInsert && insert && m_mounted)
+                    handleSurpriseRemoval();
                 if (lastEject && !eject)
                     unmountPcie();
                 lastInsert = insert;
@@ -709,23 +711,52 @@ private:
             }
         }
 
-        std::string pciAddress = pciAddressForBlockDevice(device);
-        if (pciAddress.empty())
-            pciAddress = findNvmePciAddress();
-        if (!pciAddress.empty()) {
-            const fs::path removePath = fs::path("/sys/bus/pci/devices") / pciAddress / "remove";
-            if (!writeTextFile(removePath, "1\n")) {
-                refreshMountState(true);
-                return false;
-            }
-            if (::access("/usr/bin/udevadm", X_OK) == 0)
-                runCommand({"/usr/bin/udevadm", "settle"});
+        if (!removePcieDevice(device)) {
+            refreshMountState(true);
+            return false;
         }
 
         m_mounted = false;
         m_mountedDevice.clear();
         m_hat.writeLed(false);
         std::cout << "CFE automounter: media safely ejected" << std::endl;
+        return true;
+    }
+
+    // The card left the slot while mounted. A Pi 5 cannot use a re-inserted NVMe
+    // until its PCIe device is removed and rescanned, and the stale mount would
+    // keep m_mounted true so the next insert edge is ignored. Unmount lazily (no
+    // syncfs: it would block on the vanished device; open files stay valid) and
+    // remove the device, which also fails its pending I/O at once. The next
+    // insert edge then goes through mountPcie's reset and rescan.
+    void handleSurpriseRemoval()
+    {
+        const std::string device = m_mountedDevice.empty() ? m_lastMountedDevice : m_mountedDevice;
+        std::cout << "CFE automounter: card removed while mounted source="
+                  << (device.empty() ? "none" : device) << std::endl;
+        if (::umount2(m_config.mountPath.c_str(), MNT_DETACH) != 0)
+            std::cerr << "CFE automounter: lazy unmount failed for " << m_config.mountPath
+                      << ": " << std::strerror(errno) << std::endl;
+        if (!removePcieDevice(device))
+            std::cerr << "CFE automounter: could not remove the NVMe PCIe device" << std::endl;
+        m_mounted = false;
+        m_mountedDevice.clear();
+        m_hat.writeLed(false);
+        refreshMountState(true);
+    }
+
+    bool removePcieDevice(const std::string &device)
+    {
+        std::string pciAddress = pciAddressForBlockDevice(device);
+        if (pciAddress.empty())
+            pciAddress = findNvmePciAddress();
+        if (pciAddress.empty())
+            return true;
+        const fs::path removePath = fs::path("/sys/bus/pci/devices") / pciAddress / "remove";
+        if (!writeTextFile(removePath, "1\n"))
+            return false;
+        if (::access("/usr/bin/udevadm", X_OK) == 0)
+            runCommand({"/usr/bin/udevadm", "settle"});
         return true;
     }
 
