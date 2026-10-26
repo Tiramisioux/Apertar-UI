@@ -285,6 +285,16 @@ void MediaStatusBridge::setStandby(bool standby)
     }
 }
 
+void MediaStatusBridge::setCoreMediaState(const QString &state, bool alive)
+{
+    if (m_coreMediaKnown && m_coreMediaState == state && m_coreMediaAlive == alive)
+        return;
+    m_coreMediaKnown = true;
+    m_coreMediaState = state;
+    m_coreMediaAlive = alive;
+    updateStatus();
+}
+
 void MediaStatusBridge::setDriveDiscoveryActive(bool active)
 {
     if (m_driveDiscoveryActive == active)
@@ -1232,6 +1242,19 @@ void MediaStatusBridge::pollCoreWriteSpeedTest()
 void MediaStatusBridge::updateStatus()
 {
     if (m_standby) return;
+    // Core says the medium behind the mount is gone: do not ask QStorageInfo,
+    // which still lists it and whose statvfs can block on the dead device.
+    if (m_coreMediaKnown && !m_coreMediaAlive &&
+        (m_coreMediaState == QStringLiteral("removed") || m_coreMediaState == QStringLiteral("error"))) {
+        setMediaMounted(false);
+        const QString status = m_coreMediaState == QStringLiteral("removed")
+            ? QStringLiteral("MEDIA REMOVED") : QStringLiteral("MEDIA ERROR");
+        if (m_statusText != status) {
+            m_statusText = status;
+            emit statusTextChanged();
+        }
+        return;
+    }
     bool mounted = false;
     qulonglong newFreeBytes = 0;
     qulonglong newTotalBytes = 0;

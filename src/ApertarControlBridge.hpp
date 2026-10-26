@@ -174,6 +174,8 @@ signals:
     void recordingChanged();
     void recordingHealthChanged();
     void standbyChanged();
+    // Core's media watcher state, from the "media" event and get_state.
+    void coreMediaStateChanged(const QString &state, bool alive);
     void timelapseActiveChanged();
     void mediaWritesPendingChanged();
     void timelapseShotCountChanged();
@@ -271,6 +273,7 @@ private:
     void setAudioInputLevel(int value);
     void setConnected(bool value);
     void setLastError(const QString &value);
+    void setCoreMediaState(const QString &state, bool alive);
 
     QSettings m_settings;
     bool m_rawCompressionSupported = false;
@@ -314,6 +317,8 @@ private:
     bool m_recording = false;
     bool m_recordingHasDroppedFrames = false;
     bool m_standby = false;
+    QString m_coreMediaState;
+    bool m_coreMediaAlive = true;
     bool m_timelapseActive = false;
     qulonglong m_timelapseShotCount = 0;
     bool m_stillExposureActive = false;

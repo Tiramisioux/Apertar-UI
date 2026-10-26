@@ -38,6 +38,9 @@ class MediaStatusBridge : public QObject
 public:
     explicit MediaStatusBridge(QObject *parent = nullptr);
     void setStandby(bool standby);
+    // Core's media watcher ("mounted", "removed", "error", "none"). A pulled card
+    // stays in the mount table, so QStorageInfo alone keeps saying READY.
+    void setCoreMediaState(const QString &state, bool alive);
 
     bool mediaMounted() const { return m_mediaMounted; }
     QString mountPath() const { return m_mountPath; }
@@ -133,6 +136,9 @@ private:
     QTimer m_timer;
     bool m_standby = false;
     bool m_mediaMounted = false;
+    bool m_coreMediaKnown = false;
+    bool m_coreMediaAlive = true;
+    QString m_coreMediaState;
     QString m_mountPath = QStringLiteral("/media/RAW");
     QString m_statusText = QStringLiteral("NO MEDIA");
     QString m_lastActionError;

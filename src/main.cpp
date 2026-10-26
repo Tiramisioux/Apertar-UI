@@ -315,6 +315,8 @@ int main(int argc, char *argv[])
 
     settings.setControlBridge(&apertarControlBridge);
     monitorRuntimeBridge.setMediaBridge(&mediaBridge);
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::coreMediaStateChanged,
+                     &mediaBridge, &MediaStatusBridge::setCoreMediaState);
     settings.setDefaultCameraControlsOpacity(displayConfig.controlsOpacity());
     audioDeviceBridge.setSettingsBridge(&settings);
     audioMeterBridge.setSettingsBridge(&settings);

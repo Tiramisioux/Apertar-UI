@@ -1207,6 +1207,11 @@ void ApertarControlBridge::applyCoreMessage(const QJsonObject &message)
         applyCoreState(message);
         return;
     }
+    if (event == QStringLiteral("media")) {
+        setCoreMediaState(message.value(QStringLiteral("state")).toString(),
+                          message.value(QStringLiteral("mounted")).toBool(true));
+        return;
+    }
     if (event == QStringLiteral("audio_level")) {
         setAudioInputLevel(message.value(QStringLiteral("input_level")).toInt(0));
         return;
@@ -1272,8 +1277,20 @@ void ApertarControlBridge::applyCoreMessage(const QJsonObject &message)
         applyCoreState(message);
 }
 
+void ApertarControlBridge::setCoreMediaState(const QString &state, bool alive)
+{
+    if (state.isEmpty() || (state == m_coreMediaState && alive == m_coreMediaAlive))
+        return;
+    m_coreMediaState = state;
+    m_coreMediaAlive = alive;
+    emit coreMediaStateChanged(state, alive);
+}
+
 void ApertarControlBridge::applyCoreState(const QJsonObject &state)
 {
+    if (state.contains(QStringLiteral("media_state")))
+        setCoreMediaState(state.value(QStringLiteral("media_state")).toString(),
+                          state.value(QStringLiteral("media_alive")).toBool(true));
     if (state.contains(QStringLiteral("preview_exposure_reference"))) {
         const auto reference=state.value(QStringLiteral("preview_exposure_reference")).toObject().toVariantMap();
         if (reference!=m_previewExposureReference) {
