@@ -315,6 +315,8 @@ private:
     QString m_exposureMetering = QStringLiteral("centre-weighted");
     QVariantList m_exposureMeteringOptions;
     bool m_recording = false;
+    bool m_fpsSpeedRamp = false; // Core's fps_speed_ramp (T31): FPS may change during a raw take
+    bool m_soundRecording = false; // a sound-only take: recording, but not the camera
     bool m_recordingHasDroppedFrames = false;
     bool m_standby = false;
     QString m_coreMediaState;

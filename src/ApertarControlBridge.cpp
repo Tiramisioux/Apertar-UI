@@ -270,6 +270,13 @@ bool ApertarControlBridge::applyFps(const QString &displayValue)
     if (!sendCoreCommand(QStringLiteral("set_fps"), { { QStringLiteral("value"), fpsValue } }, &fpsReply))
         return false;
 
+    // A ramp step in a camera take (T31): Core applies the shutter policy (angle or
+    // exposure) and restores the take's start rate at stop, and sendCoreCommand has
+    // already applied its reply. Send nothing more: a set_shutter_us here would undo
+    // the exposure policy, and saving would make a take-scoped rate the setting.
+    if (m_recording && !m_soundRecording && m_fpsSpeedRamp)
+        return true;
+
     setFps(formatFpsValue(fpsValue));
     if (m_shutterAuto) {
         setShutterAngle(QStringLiteral("Auto"));
@@ -1219,6 +1226,10 @@ void ApertarControlBridge::applyCoreMessage(const QJsonObject &message)
 
     if (event == QStringLiteral("recording")) {
         applyCoreState(message);
+        // Core's sound-only take sends sound_only in its event instead of sound_recording.
+        if (message.contains(QStringLiteral("sound_only")))
+            m_soundRecording = message.value(QStringLiteral("active")).toBool(false)
+                               && message.value(QStringLiteral("sound_only")).toBool(false);
         setRecordingState(message.value(QStringLiteral("active")).toBool(false));
         const auto error = message.value(QStringLiteral("error")).toString();
         m_lastRecordingError = error;
@@ -1357,6 +1368,12 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
 
     if (state.contains(QStringLiteral("shutter_auto")))
         m_shutterAuto = state.value(QStringLiteral("shutter_auto")).toBool(m_shutterAuto);
+
+    if (state.contains(QStringLiteral("fps_speed_ramp")))
+        m_fpsSpeedRamp = state.value(QStringLiteral("fps_speed_ramp")).toBool(m_fpsSpeedRamp);
+
+    if (state.contains(QStringLiteral("sound_recording")))
+        m_soundRecording = state.value(QStringLiteral("sound_recording")).toBool(m_soundRecording);
 
     const double ev = state.value(QStringLiteral("exposure_compensation")).toDouble(m_exposureCompensation);
     const bool evAvailable = state.value(QStringLiteral("exposure_compensation_available")).toBool(m_exposureCompensationAvailable);
