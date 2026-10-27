@@ -816,7 +816,7 @@ function availableFpsOptions() {
                   ? [24.000, 25.000, 30.000, 35.000, 40.000, 45.000, 50.000, 60.000, 70.000, 80.000, 90.000, 100.000, 110.000, 120.000, 130.000, 140.000, 150.000, 160.000, 170.000, 180.000, 190.000, 200.000, 210.000, 220.000, 230.000, 240.000, 280.000]
                   : ((root.imx577Detected)
                      ? [24.000, 25.000, 30.000, 50.000, 60.000, 100.000]
-                     : [24.000, 25.000, 30.000, 50.000, 60.000])
+                     : [24.000, 25.000, 30.000, 33.000, 50.000, 60.000])
     var max = root.maximumSupportedFpsForResolution(root.resolution)
     if (root.h264RecordFormat && root.controlBridge && root.controlBridge.h264MaxFps > 0)
         max = Math.min(max, root.controlBridge.h264MaxFps)
@@ -1245,6 +1245,22 @@ function applyResolutionBase(resolutionValue) {
 }
 
 // "clearhdr" turns 4K Clear HDR on; any other resolution turns it off first.
+// The resolution button toggles 4K 16-bit Clear HDR and 4K 12-bit SDR (Patrik,
+// 2026-10-27). Core keeps 16-bit only if asked after Clear HDR is on, and falls
+// back to 12-bit when Clear HDR goes off. Other resolutions: Settings.
+function toggleClearHdr16() {
+    if (!root.controlBridge || !root.imx585Detected)
+        return
+    if (root.clearHdrActive) {
+        root.controlBridge.applyClearHdr(false)
+        return
+    }
+    if (!root.clearHdrAvailable)
+        return
+    if (root.controlBridge.applyClearHdr(true))
+        root.controlBridge.applyRawBitDepth("16-bit")
+}
+
 function applyQuickResolution(resolutionValue) {
     if (resolutionValue === "clearhdr") {
         if (root.controlBridge && !root.clearHdrActive)
@@ -3263,7 +3279,11 @@ Text {
                                 anchors.fill: parent
                                 onClicked: {
                                     root.openDropdown = ""
-                                    if (root.quickMenuFieldOpen === "resolution") {
+                                    if (root.imx585Detected && !root.processedVideoRecordFormat) {
+                                        root.quickMenuFieldOpen = ""
+                                        root.quickMenuResolutionOpen = false
+                                        root.toggleClearHdr16()
+                                    } else if (root.quickMenuFieldOpen === "resolution") {
                                         root.quickMenuFieldOpen = ""
                                         root.quickMenuResolutionOpen = false
                                     } else {
