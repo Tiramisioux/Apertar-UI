@@ -816,7 +816,7 @@ function availableFpsOptions() {
                   ? [24.000, 25.000, 30.000, 35.000, 40.000, 45.000, 50.000, 60.000, 70.000, 80.000, 90.000, 100.000, 110.000, 120.000, 130.000, 140.000, 150.000, 160.000, 170.000, 180.000, 190.000, 200.000, 210.000, 220.000, 230.000, 240.000, 280.000]
                   : ((root.imx577Detected)
                      ? [24.000, 25.000, 30.000, 50.000, 60.000, 100.000]
-                     : [24.000, 25.000, 30.000, 33.000, 50.000, 60.000])
+                     : [25.000, 33.000, 50.000])   // IMX585 and others: Patrik, 2026-10-27 (temporary)
     var max = root.maximumSupportedFpsForResolution(root.resolution)
     if (root.h264RecordFormat && root.controlBridge && root.controlBridge.h264MaxFps > 0)
         max = Math.min(max, root.controlBridge.h264MaxFps)
