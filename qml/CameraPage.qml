@@ -782,8 +782,9 @@ function maximumSupportedFpsForResolution(resolutionValue) {
 
     if (root.imx585Detected) {
         var imx585Max = 60.0
+        // Clear HDR 16-bit stops at 25, as in Core's tableMaximumFpsForResolution().
         if (resolutionValue === "3856x2180" || resolutionValue === "3840x2160")
-            imx585Max = 30.0
+            imx585Max = root.clearHdrActive && root.rawBitDepthValue === "16-bit" ? 25.0 : 30.0
         else if (resolutionValue === "3840x2024" ||
                  resolutionValue === "3840x2076" ||
                  resolutionValue === "3840x1920" ||
