@@ -671,6 +671,11 @@ function currentRawBitDepthNumber() {
         return 8
     if (root.rawBitDepthValue === "10-bit")
         return 10
+    // 16-bit Clear HDR: 2 bytes a pixel. Read as 12 the time-left estimate was a
+    // third too long (HDMI 50 min, Core 37 min, 2026-10-27). The IMX477 frame-rate
+    // tables treat anything above 10 as their 12-bit table, as before.
+    if (root.rawBitDepthValue === "16-bit")
+        return 16
     return 12
 }
 
