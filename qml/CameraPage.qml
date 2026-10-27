@@ -519,8 +519,10 @@ Item {
     readonly property string formatDisplayValue: root.processedVideoRecordFormat
                                                  ? root.h264OutputResolutionValue
                                                  : root.resolution
+    // Raw takes say what the sensor delivers: bit depth and Clear HDR before the codec.
+    readonly property string rawDisplayDetail: root.rawBitDepthValue + (root.clearHdrActive ? " · Clear HDR" : "")
     readonly property string formatDisplaySubtext: root.photoModeEnabled ? root.photoFormatSetting : root.recordingFormat.indexOf("ProRes") === 0 ? root.recordingFormat : root.h264RecordFormat ? "H.264"
-                                                   : (root.recordingFormat === "MLV" ? "MLV RAW"
+                                                   : root.rawDisplayDetail + " · " + (root.recordingFormat === "MLV" ? "MLV RAW"
                                                          : (root.cdngCompressionValue === "lossless_jpeg" ? "Lossless"
                                                             : (root.cdngCompressionValue === "lossy_3to1" ? "Lossy 3:1"
                                                                : (root.cdngCompressionValue === "lossy_5to1" ? "Lossy 5:1" : "Uncompressed"))))
