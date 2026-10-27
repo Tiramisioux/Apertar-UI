@@ -101,6 +101,15 @@ Window {
     readonly property string resolutionValue: apertarControlBridge && apertarControlBridge.resolution.length > 0
                                              ? apertarControlBridge.resolution
                                              : "1920x1080"
+    // Raw takes add bit depth and Clear HDR to the RESOLUTION caption (Patrik, 2026-10-27).
+    readonly property string rawBitDepthValue: apertarControlBridge && apertarControlBridge.rawBitDepth.length > 0
+                                              ? apertarControlBridge.rawBitDepth : ""
+    readonly property bool clearHdrActive: !!apertarControlBridge && apertarControlBridge.clearHdr
+    readonly property bool rawRecordFormat: !root.photoModeEnabled && root.recordingFormatValue.indexOf("ProRes") !== 0
+                                            && root.recordingFormatValue !== "H.264"
+    readonly property string resolutionCaption: "RESOLUTION" + (root.rawRecordFormat && root.rawBitDepthValue.length > 0
+                                                ? " · " + root.rawBitDepthValue + (root.clearHdrActive ? " · Clear HDR" : "")
+                                                : "")
     readonly property string processedVideoDefaultResolutionValue: "2560x1440"
     readonly property string h264OutputResolutionValue: root.h264ResolutionValue === "Match Capture"
                                                         ? root.processedVideoDefaultResolutionValue
@@ -886,7 +895,7 @@ Window {
                 Text {
                     x: root.hudShadowOffset
                     y: root.hudShadowOffset
-                    text: "RESOLUTION"
+                    text: root.resolutionCaption
                     color: root.hudShadowColor
                     font.family: interBold.font.family
                     font.pixelSize: 13
@@ -897,7 +906,7 @@ Window {
 
                 Text {
                     id: resolutionLabel
-                    text: "RESOLUTION"
+                    text: root.resolutionCaption
                     color: "#b8ffffff"
                     font.family: interBold.font.family
                     font.pixelSize: 13
