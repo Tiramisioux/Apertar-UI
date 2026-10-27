@@ -514,7 +514,7 @@ Item {
                                                && root.cdngCompressionValue === "lossless_jpeg"
     readonly property bool losslessIsoLimitedMode: root.losslessImx585Mode || root.losslessFourKMode || root.losslessTwoKMode
     readonly property var isoOptions: root.losslessIsoLimitedMode
-                                      ? ["100", "200", "400", "800"]
+                                      ? ["100", "200", "400", "800", "1600"]
                                       : ["Auto", "100", "200", "400", "800", "1600", "3200", "6400", "12800", "25600", "51200"]
     readonly property string formatDisplayValue: root.processedVideoRecordFormat
                                                  ? root.h264OutputResolutionValue
