@@ -785,7 +785,7 @@ function maximumSupportedFpsForResolution(resolutionValue) {
     if (root.imx585Detected) {
         var imx585Max = 60.0
         if (resolutionValue === "3856x2180" || resolutionValue === "3840x2160")
-            imx585Max = 30.0
+            imx585Max = root.clearHdrActive ? 30.0 : 60.0   // SDR 60 per the sensor probe (2026-10-27; temporary)
         else if (resolutionValue === "3840x2024" ||
                  resolutionValue === "3840x2076" ||
                  resolutionValue === "3840x1920" ||
@@ -825,11 +825,14 @@ function availableFpsOptions() {
         max = Math.min(max, root.imx477MaximumUncompressedFpsForResolution(normalizedResolution))
     }
     if (root.losslessImx585Mode)
-        max = Math.min(max, 30.0)
+        max = Math.min(max, 50.0)   // was 30 (Patrik, 2026-10-27; temporary)
     else if (root.losslessFourKMode)
         max = Math.min(max, root.isApproximatelyFourThree(root.resolution) ? 24.0 : 30.0)
     else if (root.losslessTwoKMode)
         max = Math.min(max, 60.0)
+    // 16-bit Clear HDR: above 25 fps Core switches to 12-bit SDR lossless (up to 50).
+    if (root.imx585Detected && root.clearHdrActive && root.rawBitDepthValue === "16-bit" && !root.photoModeEnabled)
+        max = Math.max(max, 50.0)
     var filtered = []
     for (var i = 0; i < presets.length; ++i) {
         if (presets[i] <= max + 0.0005)
