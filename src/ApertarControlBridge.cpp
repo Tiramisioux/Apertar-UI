@@ -1450,9 +1450,10 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
             setWhiteBalance(QString::number(kelvin) + QStringLiteral("K"));
     }
 
-    // Values the camera sets rather than the operator, shown green: auto (with the value in
-    // use), held for Clear HDR, ISO on the mode's ceiling, the angle in a ramp take with the
-    // Exposure policy (Core moves it with the frame rate).
+    // Values the camera decides beyond the operator's settings, shown green: held for Clear HDR,
+    // the angle in a ramp take with the Exposure policy (Core moves it with the frame rate). Auto
+    // modes stay white but show the value in use; a ceiling the camera added is QML's call (it has
+    // the operator's lists).
     const int previousIsoMax = m_isoMax;
     const double previousFpsMax = m_fpsMax;
     if (state.contains(QStringLiteral("iso_max")))
@@ -1472,9 +1473,9 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         const QString whiteBalanceInUse = !m_whiteBalanceAuto ? QString()
             : (state.value(QStringLiteral("wb_measured")).toBool(false) && kelvinActual > 0
                    ? QString::number(kelvinActual) + QStringLiteral("K") : m_whiteBalanceInUse);
-        const bool isoSet = m_isoAuto || m_isoAutoAfterClearHdr || (m_isoMax > 0 && qRound(parseIsoValue(m_iso)) == m_isoMax);
-        const bool whiteBalanceSet = m_whiteBalanceAuto || m_whiteBalanceAutoAfterClearHdr;
-        const bool shutterSet = m_shutterAuto || (m_recording && m_fpsSpeedRamp && m_fpsSpeedRampKeepExposure);
+        const bool isoSet = m_isoAutoAfterClearHdr;
+        const bool whiteBalanceSet = m_whiteBalanceAutoAfterClearHdr;
+        const bool shutterSet = m_recording && m_fpsSpeedRamp && m_fpsSpeedRampKeepExposure;
         if (isoInUse != m_isoInUse || whiteBalanceInUse != m_whiteBalanceInUse || isoSet != m_isoSetByCamera ||
             whiteBalanceSet != m_whiteBalanceSetByCamera || shutterSet != m_shutterSetByCamera ||
             m_isoMax != previousIsoMax || m_fpsMax != previousFpsMax) {

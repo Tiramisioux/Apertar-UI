@@ -92,6 +92,16 @@ Window {
     readonly property string fpsValue: apertarControlBridge && apertarControlBridge.fps.length > 0
                                       ? apertarControlBridge.fps
                                       : "24.000"
+    // The ISO in use is the ceiling the camera added (not one of the operator's values; the
+    // built-in list when none is set).
+    readonly property bool isoOnAddedCap: {
+        const maximum = apertarControlBridge ? apertarControlBridge.isoMax : 0
+        if (!(maximum > 0) || !apertarControlBridge || Math.round(parseFloat(apertarControlBridge.iso)) !== maximum)
+            return false
+        const own = settingsBridge && settingsBridge.isoSteps.length > 0 ? settingsBridge.isoSteps
+                    : [100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200]
+        return !own.some(v => Math.abs(Number(v) - maximum) < 0.5)
+    }
     readonly property string isoValue: apertarControlBridge && apertarControlBridge.isoInUse.length > 0
                                       ? apertarControlBridge.isoInUse
                                       : (apertarControlBridge && apertarControlBridge.iso.length > 0
@@ -177,7 +187,7 @@ Window {
     readonly property var topMonitorInfoItems: [
         { label: "FORMAT", value: root.formatInfoValue },
         { label: "FPS", value: root.fpsValue },
-        { label: "ISO", value: root.isoValue, cameraSet: !!apertarControlBridge && apertarControlBridge.isoSetByCamera },
+        { label: "ISO", value: root.isoValue, cameraSet: (!!apertarControlBridge && apertarControlBridge.isoSetByCamera) || root.isoOnAddedCap },
         { label: "SHUTTER", value: root.shutterDisplayValue, cameraSet: !!apertarControlBridge && apertarControlBridge.shutterSetByCamera },
         { label: "WB", value: root.wbValue, cameraSet: !!apertarControlBridge && apertarControlBridge.whiteBalanceSetByCamera }
     ]

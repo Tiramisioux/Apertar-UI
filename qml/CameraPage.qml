@@ -530,6 +530,13 @@ Item {
             return entries
         return (root.iso === "Auto" ? ["Auto", "Lock"] : ["Auto"]).concat(entries)
     }
+    // The ISO in use is the ceiling the camera added (not one of the operator's values).
+    readonly property bool isoOnAddedCap: {
+        const maximum = root.controlBridge ? root.controlBridge.isoMax : 0
+        if (!(maximum > 0) || Math.round(parseFloat(root.iso)) !== maximum)
+            return false
+        return !root.valueSteps(settingsState ? settingsState.isoSteps : [], root.builtInIsoSteps).some(v => Math.abs(v - maximum) < 0.5)
+    }
     readonly property var wbOptions: ["Auto"].concat(root.valueSteps(settingsState ? settingsState.wbSteps : [], root.builtInWbSteps)
                                                      .map(v => String(Math.round(v)) + "K"))
     readonly property var fpsPickerOptions: root.fpsOptionEntries()
@@ -3043,7 +3050,7 @@ Text {
                 popupTopMargin: root.topDropdownPopupTopMargin
                 value: root.iso
                 displayValue: root.controlBridge ? root.controlBridge.isoInUse : ""
-                valueColor: root.controlBridge && root.controlBridge.isoSetByCamera ? root.cameraSetValueColor : "white"
+                valueColor: (root.controlBridge && root.controlBridge.isoSetByCamera) || root.isoOnAddedCap ? root.cameraSetValueColor : "white"
                 isOpen: root.openDropdown === "iso"
                 options: root.isoOptions
                 onToggleRequested: {
