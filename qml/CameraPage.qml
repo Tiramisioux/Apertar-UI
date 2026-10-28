@@ -520,13 +520,13 @@ Item {
     readonly property var builtInShutterAngleSteps: [11.25, 15, 22.5, 30, 37.5, 45, 60, 72, 75, 90, 108, 120, 144, 150, 172.8, 180, 216, 270, 324, 360]
     readonly property var builtInWbSteps: [2500, 2800, 3000, 3200, 3400, 3600, 4000, 4500, 4800, 5000, 5200, 5400, 5600, 5800, 6000, 6500, 7000, 7500, 8000]
     // isoMax is Core's ISO ceiling for the current mode (Clear HDR, lossless cDNG), 0 = none:
-    // values above it greyed, the ceiling added in green when not in the list; no Auto under a
-    // ceiling or in Clear HDR; with auto on, Lock freezes the gain in use.
+    // values above it greyed, the ceiling added in green when not in the list; no Auto in Clear
+    // HDR; with auto on, Lock freezes the gain in use.
     readonly property var isoOptions: {
         const maximum = root.controlBridge ? root.controlBridge.isoMax : (root.losslessIsoLimitedMode ? 1600 : 0)
         const entries = root.cappedValueEntries(root.valueSteps(settingsState ? settingsState.isoSteps : [], root.builtInIsoSteps),
                                                 maximum, v => String(Math.round(v)))
-        if (maximum > 0 || root.clearHdrActive)
+        if (root.clearHdrActive)
             return entries
         return (root.iso === "Auto" ? ["Auto", "Lock"] : ["Auto"]).concat(entries)
     }
