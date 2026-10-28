@@ -535,11 +535,11 @@ Item {
             : options
     }
     // Raw takes say what the sensor delivers on the resolution line itself, same size as the
-    // pixel numbers: "3840x2160 · 16-bit · Clear HDR" (Patrik, 2026-10-28).
+    // pixel numbers: "3840x2160 · 16 b · Clear HDR" (Patrik, 2026-10-28).
     readonly property bool rawRecordFormat: !root.photoModeEnabled && !root.processedVideoRecordFormat
                                             && root.recordingFormat.indexOf("ProRes") !== 0
     readonly property string rawResolutionDetail: root.rawRecordFormat && root.rawBitDepthValue.length > 0
-                                                  ? " · " + root.rawBitDepthValue + (root.clearHdrActive ? " · Clear HDR" : "")
+                                                  ? " · " + root.rawBitDepthValue.replace("-bit", " b") + (root.clearHdrActive ? " · Clear HDR" : "")
                                                   : ""
     readonly property string formatDisplayValue: root.processedVideoRecordFormat
                                                  ? root.h264OutputResolutionValue
