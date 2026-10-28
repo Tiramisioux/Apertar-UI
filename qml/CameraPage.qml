@@ -534,9 +534,16 @@ Item {
             ? ["Auto", "Lock"].concat(options.filter(v => v !== "Auto"))
             : options
     }
+    // Raw takes say what the sensor delivers on the resolution line itself, same size as the
+    // pixel numbers: "3840x2160 · 16-bit · Clear HDR" (Patrik, 2026-10-28).
+    readonly property bool rawRecordFormat: !root.photoModeEnabled && !root.processedVideoRecordFormat
+                                            && root.recordingFormat.indexOf("ProRes") !== 0
+    readonly property string rawResolutionDetail: root.rawRecordFormat && root.rawBitDepthValue.length > 0
+                                                  ? " · " + root.rawBitDepthValue + (root.clearHdrActive ? " · Clear HDR" : "")
+                                                  : ""
     readonly property string formatDisplayValue: root.processedVideoRecordFormat
                                                  ? root.h264OutputResolutionValue
-                                                 : root.resolution
+                                                 : root.resolution + root.rawResolutionDetail
     readonly property string formatDisplaySubtext: root.photoModeEnabled ? root.photoFormatSetting : root.recordingFormat.indexOf("ProRes") === 0 ? root.recordingFormat : root.h264RecordFormat ? "H.264"
                                                    : (root.recordingFormat === "MLV" ? "MLV RAW"
                                                          : (root.cdngCompressionValue === "lossless_jpeg" ? "Lossless"

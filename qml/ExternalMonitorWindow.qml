@@ -102,6 +102,16 @@ Window {
                                      : (apertarControlBridge && apertarControlBridge.whiteBalance.length > 0
                                         ? apertarControlBridge.whiteBalance
                                         : "5600K")
+    // Raw takes add bit depth and Clear HDR on the resolution line, same size as the pixels.
+    readonly property string rawBitDepthValue: apertarControlBridge && apertarControlBridge.rawBitDepth.length > 0
+                                              ? apertarControlBridge.rawBitDepth : ""
+    readonly property bool rawRecordFormat: !root.photoModeEnabled && root.recordingFormatValue.indexOf("ProRes") !== 0
+                                            && root.recordingFormatValue !== "H.264"
+    readonly property string resolutionLineValue: root.resolutionValue
+                                                  + (root.rawRecordFormat && root.rawBitDepthValue.length > 0
+                                                     ? " · " + root.rawBitDepthValue
+                                                       + (!!apertarControlBridge && apertarControlBridge.clearHdr ? " · Clear HDR" : "")
+                                                     : "")
     readonly property string resolutionValue: apertarControlBridge && apertarControlBridge.resolution.length > 0
                                              ? apertarControlBridge.resolution
                                              : "1920x1080"
@@ -921,7 +931,7 @@ Window {
                 Text {
                     x: root.hudShadowOffset
                     y: root.hudShadowOffset
-                    text: root.resolutionValue
+                    text: root.resolutionLineValue
                     color: root.hudShadowColor
                     font.family: interBold.font.family
                     font.pixelSize: 34
@@ -930,7 +940,7 @@ Window {
 
                 Text {
                     id: resolutionText
-                    text: root.resolutionValue
+                    text: root.resolutionLineValue
                     color: "white"
                     font.family: interBold.font.family
                     font.pixelSize: 34
