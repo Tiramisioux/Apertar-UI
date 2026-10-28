@@ -513,8 +513,8 @@ Item {
                                                && root.recordingFormat === "cDNG"
                                                && root.cdngCompressionValue === "lossless_jpeg"
     readonly property bool losslessIsoLimitedMode: root.losslessImx585Mode || root.losslessFourKMode || root.losslessTwoKMode
-    // Green for values the camera sets (auto, held for Clear HDR, on a ceiling, ramp-driven).
-    readonly property color cameraSetValueColor: "#00c951"
+    // Values the camera decides (held for Clear HDR, a cap or flicker-free angle it added, a
+    // ramp-driven angle) are shown in italics; auto modes are plain.
     // T33: the lists come from UI.conf (Core's set_value_steps); empty = these built-in lists.
     readonly property var builtInIsoSteps: [100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200]
     readonly property var builtInShutterAngleSteps: [11.25, 15, 22.5, 30, 37.5, 45, 60, 72, 75, 90, 108, 120, 144, 150, 172.8, 180, 216, 270, 324, 360]
@@ -3050,7 +3050,7 @@ Text {
                 popupTopMargin: root.topDropdownPopupTopMargin
                 value: root.iso
                 displayValue: root.controlBridge ? root.controlBridge.isoInUse : ""
-                valueColor: (root.controlBridge && root.controlBridge.isoSetByCamera) || root.isoOnAddedCap ? root.cameraSetValueColor : "white"
+                valueItalic: (root.controlBridge && root.controlBridge.isoSetByCamera) || root.isoOnAddedCap
                 isOpen: root.openDropdown === "iso"
                 options: root.isoOptions
                 onToggleRequested: {
@@ -3083,7 +3083,7 @@ Text {
                 popupRadius: root.topDropdownPopupRadius
                 popupTopMargin: root.topDropdownPopupTopMargin
                 value: root.shutterDisplayValue
-                valueColor: root.controlBridge && root.controlBridge.shutterSetByCamera ? root.cameraSetValueColor : "white"
+                valueItalic: !!root.controlBridge && root.controlBridge.shutterSetByCamera
                 isOpen: root.openDropdown === "shutter"
                 options: root.shutterOptions
                 onToggleRequested: {
@@ -3125,7 +3125,7 @@ Text {
                 popupTopMargin: root.topDropdownPopupTopMargin
                 value: root.wb
                 displayValue: root.controlBridge ? root.controlBridge.whiteBalanceInUse : ""
-                valueColor: root.controlBridge && root.controlBridge.whiteBalanceSetByCamera ? root.cameraSetValueColor : "white"
+                valueItalic: !!root.controlBridge && root.controlBridge.whiteBalanceSetByCamera
                 enabled: root.whiteBalanceAvailable
                 opacity: enabled ? 1.0 : 0.4
                 isOpen: enabled && root.openDropdown === "wb"

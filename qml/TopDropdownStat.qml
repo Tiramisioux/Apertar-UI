@@ -8,7 +8,7 @@ Item {
     property string value: ""
     // Shown instead of value when set (e.g. the ISO auto is using); value stays the selection.
     property string displayValue: ""
-    property color valueColor: "white"
+    property bool valueItalic: false     // set by the camera, not the operator (T33)
     property bool isOpen: false
     property var options: []
     property real maxPopupHeight: 340
@@ -35,7 +35,8 @@ Item {
         anchors.leftMargin: 16
         anchors.bottomMargin: 11
         text: root.displayValue.length > 0 ? root.displayValue : root.value
-        color: root.valueColor
+        color: "white"
+        font.italic: root.valueItalic
         font.family: interRegular.font.family
         font.pixelSize: root.valueFontSize
         renderType: Text.NativeRendering
@@ -109,7 +110,8 @@ Item {
                             Text {
                                 anchors.centerIn: parent
                                 text: optionValue
-                                color: !optionEnabled ? "#59ffffff" : (optionCameraSet ? "#00c951" : "white")
+                                color: !optionEnabled ? "#59ffffff" : "white"
+                                font.italic: optionCameraSet
                                 font.family: interRegular.font.family
                                 font.pixelSize: root.popupOptionFontSize
                                 renderType: Text.NativeRendering

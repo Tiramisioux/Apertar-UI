@@ -883,8 +883,9 @@ Window {
                             Text {
                                 id: valueText
                                 text: modelData.value
-                                // Green: a value the camera sets (auto, held for Clear HDR, ceiling, ramp).
-                                color: modelData.cameraSet ? "#00c951" : "white"
+                                // Italic: a value the camera decides (held for Clear HDR, an added cap, a ramp angle).
+                                color: "white"
+                                font.italic: modelData.cameraSet === true
                                 font.family: interBold.font.family
                                 font.pixelSize: 34
                                 style: Text.Outline
