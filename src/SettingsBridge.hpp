@@ -49,6 +49,9 @@ class SettingsBridge : public QObject
     Q_PROPERTY(QString externalMonitorInfoOverlay READ externalMonitorInfoOverlay WRITE setExternalMonitorInfoOverlay NOTIFY externalMonitorInfoOverlayChanged)
     Q_PROPERTY(QString externalMonitorOrientation READ externalMonitorOrientation WRITE setExternalMonitorOrientation NOTIFY externalMonitorOrientationChanged)
     Q_PROPERTY(bool dateTimeOverlayEnabled READ dateTimeOverlayEnabled WRITE setDateTimeOverlayEnabled NOTIFY dateTimeOverlayEnabledChanged)
+    // Recording indicators next to REC: a red frame at the screen's edges, a red timecode.
+    Q_PROPERTY(bool recordingFrameEnabled READ recordingFrameEnabled WRITE setRecordingFrameEnabled NOTIFY recordingFrameEnabledChanged)
+    Q_PROPERTY(bool recordingRedTimecodeEnabled READ recordingRedTimecodeEnabled WRITE setRecordingRedTimecodeEnabled NOTIFY recordingRedTimecodeEnabledChanged)
     Q_PROPERTY(QString timecodeMode READ timecodeMode WRITE setTimecodeMode NOTIFY timecodeModeChanged)
     Q_PROPERTY(bool photoModeEnabled READ photoModeEnabled WRITE setPhotoModeEnabled NOTIFY photoModeEnabledChanged)
     Q_PROPERTY(bool photoLongExposureEnabled READ photoLongExposureEnabled WRITE setPhotoLongExposureEnabled NOTIFY photoLongExposureEnabledChanged)
@@ -192,6 +195,10 @@ public:
 
     bool dateTimeOverlayEnabled() const;
     void setDateTimeOverlayEnabled(bool value);
+    bool recordingFrameEnabled() const;
+    void setRecordingFrameEnabled(bool value);
+    bool recordingRedTimecodeEnabled() const;
+    void setRecordingRedTimecodeEnabled(bool value);
 
     QString timecodeMode() const;
     void setTimecodeMode(const QString &value);
@@ -353,6 +360,8 @@ signals:
     void externalMonitorInfoOverlayChanged();
     void externalMonitorOrientationChanged();
     void dateTimeOverlayEnabledChanged();
+    void recordingFrameEnabledChanged();
+    void recordingRedTimecodeEnabledChanged();
     void timecodeModeChanged();
     void photoModeEnabledChanged();
     void photoLongExposureEnabledChanged();
@@ -462,6 +471,8 @@ private:
     QString m_externalMonitorInfoOverlay = "On";
     QString m_externalMonitorOrientation = "Landscape";
     bool m_dateTimeOverlayEnabled = false;
+    bool m_recordingFrameEnabled = false;
+    bool m_recordingRedTimecodeEnabled = true;
     QString m_timecodeMode = "Free Run";
     bool m_photoModeEnabled = false;
     bool m_photoLongExposureEnabled = false;

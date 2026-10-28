@@ -1141,7 +1141,7 @@ Window {
                 Text {
                     id: timecodeText
                     text: root.timecode
-                    color: "white"
+                    color: root.recordingActive && (!settingsBridge || settingsBridge.recordingRedTimecodeEnabled) ? "#ff4d4d" : "white"
                     font.family: interBold.font.family
                     font.pixelSize: 42
                     style: Text.Outline
@@ -1358,5 +1358,15 @@ Window {
                 }
             }
         }
+    }
+
+    // Recording frame (request 25): a red border at the monitor's edges during a take.
+    Rectangle {
+        anchors.fill: parent
+        z: 10000
+        color: "transparent"
+        border.color: "#ff4d4d"
+        border.width: Math.max(4, Math.round(Math.min(width, height) * 0.008))
+        visible: root.recordingActive && !!settingsBridge && settingsBridge.recordingFrameEnabled
     }
 }

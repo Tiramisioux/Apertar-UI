@@ -3872,7 +3872,7 @@ TextMetrics {
                         anchors.leftMargin: root.timecodeTextInset
                         width: parent.width - (root.timecodeTextInset * 2)
                         text: root.timecode
-                        color: root.recording ? "#ff4d4d" : "white"
+                        color: root.recording && (!settingsState || settingsState.recordingRedTimecodeEnabled) ? "#ff4d4d" : "white"
                         font.family: interRegular.font.family
                         font.pixelSize: root.timecodeFontSize
                         horizontalAlignment: Text.AlignLeft
@@ -4284,5 +4284,15 @@ TextMetrics {
             }
         }
     }
-}
 
+    // Recording frame (request 25): a red border at the screen's edges during a camera take,
+    // next to the REC indicator; a switch in Settings -> Monitoring.
+    Rectangle {
+        anchors.fill: parent
+        z: 10000
+        color: "transparent"
+        border.color: "#ff4d4d"
+        border.width: Math.max(4, Math.round(Math.min(width, height) * 0.008))
+        visible: root.recording && !!settingsState && settingsState.recordingFrameEnabled
+    }
+}

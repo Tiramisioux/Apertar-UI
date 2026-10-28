@@ -789,7 +789,9 @@ Item {
         "centerMarker",
         "horizontalLevel",
         "greyscale",
-        "anamorphicDesqueeze"
+        "anamorphicDesqueeze",
+        "recordingFrame",
+        "recordingRedTimecode"
     ]
     readonly property var defaultRecordOrder: [
         "stillMode",
@@ -1082,6 +1084,8 @@ Item {
             if (itemId === "centerMarker") return "Center Marker"
             if (itemId === "horizontalLevel") return "Horizontal Level"
             if (itemId === "greyscale") return "Greyscale"
+            if (itemId === "recordingFrame") return "Recording Frame"
+            if (itemId === "recordingRedTimecode") return "Red Timecode"
             if (itemId === "anamorphicDesqueeze") return "Anamorphic Desqueeze"
         }
         if (section === "Record") {
@@ -2234,6 +2238,8 @@ Item {
         if (itemId === "centerMarker") return monitoringCenterMarkerComponent
         if (itemId === "horizontalLevel") return monitoringHorizontalLevelComponent
         if (itemId === "greyscale") return monitoringGreyscaleComponent
+        if (itemId === "recordingFrame") return monitoringRecordingFrameComponent
+        if (itemId === "recordingRedTimecode") return monitoringRecordingRedTimecodeComponent
         if (itemId === "anamorphicDesqueeze") return monitoringAnamorphicComponent
         return null
     }
@@ -2868,6 +2874,42 @@ Item {
             onChoice1Selected: function(v) {
                 if (root.settingsState)
                     root.settingsState.horizontalLevelColor = v
+            }
+        }
+    }
+
+    Component {
+        id: monitoringRecordingFrameComponent
+
+        MonitoringRow {
+            property string reorderSectionName: "Monitoring"
+            popupParent: dropdownOverlay
+            dropdownController: sharedDropdownController
+            title: "Recording Frame"
+            description: "Red frame at the screen edges while recording (touch screen, HDMI, WebUI)"
+            enabled: root.settingsState ? root.settingsState.recordingFrameEnabled : false
+            onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
+            onToggleRequested: {
+                if (root.settingsState)
+                    root.settingsState.recordingFrameEnabled = !root.settingsState.recordingFrameEnabled
+            }
+        }
+    }
+
+    Component {
+        id: monitoringRecordingRedTimecodeComponent
+
+        MonitoringRow {
+            property string reorderSectionName: "Monitoring"
+            popupParent: dropdownOverlay
+            dropdownController: sharedDropdownController
+            title: "Red Timecode"
+            description: "Timecode turns red while recording (touch screen, HDMI, WebUI)"
+            enabled: root.settingsState ? root.settingsState.recordingRedTimecodeEnabled : true
+            onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
+            onToggleRequested: {
+                if (root.settingsState)
+                    root.settingsState.recordingRedTimecodeEnabled = !root.settingsState.recordingRedTimecodeEnabled
             }
         }
     }
