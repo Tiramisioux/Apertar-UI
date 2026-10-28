@@ -17,6 +17,7 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(QString iso READ iso NOTIFY isoChanged)
     // Values the camera sets rather than the operator (shown green), from Core's state.
     Q_PROPERTY(int isoMax READ isoMax NOTIFY cameraSetValuesChanged)
+    Q_PROPERTY(double fpsMax READ fpsMax NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(QString isoInUse READ isoInUse NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(QString whiteBalanceInUse READ whiteBalanceInUse NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(bool isoSetByCamera READ isoSetByCamera NOTIFY cameraSetValuesChanged)
@@ -75,6 +76,7 @@ public:
     QString whiteBalance() const;
     bool whiteBalanceAvailable() const { return m_whiteBalanceAvailable; }
     int isoMax() const { return m_isoMax; }
+    double fpsMax() const { return m_fpsMax; }
     QString isoInUse() const { return m_isoInUse; }
     QString whiteBalanceInUse() const { return m_whiteBalanceInUse; }
     bool isoSetByCamera() const { return m_isoSetByCamera; }
@@ -335,6 +337,7 @@ private:
     bool m_isoAutoAfterClearHdr = false;
     bool m_whiteBalanceAutoAfterClearHdr = false;
     int m_isoMax = 0;
+    double m_fpsMax = 0.0;
     QString m_isoInUse;
     QString m_whiteBalanceInUse;
     bool m_isoSetByCamera = false;

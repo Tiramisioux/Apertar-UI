@@ -95,16 +95,21 @@ Item {
                         // close animation, so existing motion is preserved.
                         model: root.popupVisible ? root.options : []
 
+                        // An option is a string, or {value, enabled, cameraSet}: greyed when the
+                        // mode cannot take it, green when the camera added it (T33).
                         delegate: Rectangle {
+                            readonly property string optionValue: typeof modelData === "object" ? String(modelData.value) : String(modelData)
+                            readonly property bool optionEnabled: typeof modelData !== "object" || modelData.enabled !== false
+                            readonly property bool optionCameraSet: typeof modelData === "object" && modelData.cameraSet === true
                             width: optionsColumn.width
                             height: root.popupOptionHeight
                             radius: root.popupOptionRadius
-                            color: root.fadedControlColor(modelData === root.value ? "#22ffffff" : "transparent")
+                            color: root.fadedControlColor(optionValue === root.value ? "#22ffffff" : "transparent")
 
                             Text {
                                 anchors.centerIn: parent
-                                text: modelData
-                                color: "white"
+                                text: optionValue
+                                color: !optionEnabled ? "#59ffffff" : (optionCameraSet ? "#00c951" : "white")
                                 font.family: interRegular.font.family
                                 font.pixelSize: root.popupOptionFontSize
                                 renderType: Text.NativeRendering
@@ -112,8 +117,8 @@ Item {
 
                             MouseArea {
                                 anchors.fill: parent
-                                enabled: root.isOpen
-                                onClicked: root.optionSelected(modelData)
+                                enabled: root.isOpen && optionEnabled
+                                onClicked: root.optionSelected(optionValue)
                             }
                         }
                     }

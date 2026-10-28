@@ -87,6 +87,13 @@ class SettingsBridge : public QObject
     Q_PROPERTY(QStringList infoOrder READ infoOrder WRITE setInfoOrder NOTIFY infoOrderChanged)
     Q_PROPERTY(QStringList sidebarOrder READ sidebarOrder WRITE setSidebarOrder NOTIFY sidebarOrderChanged)
     Q_PROPERTY(QStringList favoritesOrder READ favoritesOrder WRITE setFavoritesOrder NOTIFY favoritesOrderChanged)
+    // T33: the value lists Core's set_value_steps writes to UI.conf (empty = the built-in list).
+    Q_PROPERTY(QVariantList isoSteps READ isoSteps NOTIFY valueStepsChanged)
+    Q_PROPERTY(QVariantList shutterAngleSteps READ shutterAngleSteps NOTIFY valueStepsChanged)
+    Q_PROPERTY(QVariantList fpsSteps READ fpsSteps NOTIFY valueStepsChanged)
+    Q_PROPERTY(QVariantList wbSteps READ wbSteps NOTIFY valueStepsChanged)
+    Q_PROPERTY(bool flickerFreeShutterAngles READ flickerFreeShutterAngles NOTIFY valueStepsChanged)
+    Q_PROPERTY(int mainsHz READ mainsHz NOTIFY valueStepsChanged)
     Q_PROPERTY(QStringList presetNames READ presetNames NOTIFY presetNamesChanged)
     Q_PROPERTY(QString presetStatusText READ presetStatusText NOTIFY presetStatusChanged)
     Q_PROPERTY(bool presetStatusError READ presetStatusError NOTIFY presetStatusChanged)
@@ -290,6 +297,12 @@ public:
     void setSidebarOrder(const QStringList &value);
 
     QStringList favoritesOrder() const;
+    QVariantList isoSteps() const { return m_isoSteps; }
+    QVariantList shutterAngleSteps() const { return m_shutterAngleSteps; }
+    QVariantList fpsSteps() const { return m_fpsSteps; }
+    QVariantList wbSteps() const { return m_wbSteps; }
+    bool flickerFreeShutterAngles() const { return m_flickerFreeShutterAngles; }
+    int mainsHz() const { return m_mainsHz; }
     void setFavoritesOrder(const QStringList &value);
 
     QStringList presetNames() const;
@@ -376,6 +389,7 @@ signals:
     void infoOrderChanged();
     void sidebarOrderChanged();
     void favoritesOrderChanged();
+    void valueStepsChanged();
     void presetNamesChanged();
     void presetStatusChanged();
 
@@ -396,6 +410,7 @@ private:
                         QJsonObject *settingsObject,
                         QString *errorMessage) const;
     void reloadPresetNames();
+    void reloadValueSteps();
     void setPresetStatus(const QString &text, bool error);
     void pollExternalSettings();
     void updateSettingsFileState();
@@ -485,6 +500,12 @@ private:
     QStringList m_infoOrder;
     QStringList m_sidebarOrder;
     QStringList m_favoritesOrder;
+    QVariantList m_isoSteps;
+    QVariantList m_shutterAngleSteps;
+    QVariantList m_fpsSteps;
+    QVariantList m_wbSteps;
+    bool m_flickerFreeShutterAngles = false;
+    int m_mainsHz = 50;
     QStringList m_presetNames;
     QStringList m_presetDirectorySignature;
     QString m_presetStatusText;

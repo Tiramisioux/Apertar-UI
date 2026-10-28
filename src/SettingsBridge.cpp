@@ -405,6 +405,7 @@ SettingsBridge::SettingsBridge(QObject *parent)
     m_infoOrder = settingsListValue(m_settings.value("infoOrder"));
     m_sidebarOrder = settingsListValue(m_settings.value("sidebarOrder"));
     m_favoritesOrder = settingsListValue(m_settings.value("favoritesOrder"));
+    reloadValueSteps();
     reloadPresetNames();
     m_presetDirectorySignature = currentPresetDirectorySignature();
 
@@ -574,6 +575,7 @@ void SettingsBridge::pollExternalSettings()
     setStandbyTimeoutSeconds(m_settings.value(QStringLiteral("standbyTimeoutSeconds"), m_standbyTimeoutSeconds).toInt());
     setStandbyUsbPowerOff(m_settings.value(QStringLiteral("standbyUsbPowerOff"), m_standbyUsbPowerOff).toBool());
     setFavoritesOrder(settingsListValue(m_settings.value(QStringLiteral("favoritesOrder"))));
+    reloadValueSteps();
 
     QString timecodeMode = m_settings.value(QStringLiteral("timecodeMode"), m_timecodeMode).toString().trimmed();
     if (timecodeMode.compare(QStringLiteral("Rec Run"), Qt::CaseInsensitive) == 0
@@ -1684,6 +1686,37 @@ void SettingsBridge::setSidebarOrder(const QStringList &value)
     m_sidebarOrder = value;
     if (!m_externalSettingsSyncing) m_settings.setValue("sidebarOrder", value);
     emit sidebarOrderChanged();
+}
+
+// T33: read only here; Core's set_value_steps writes these keys and this bridge follows the file.
+void SettingsBridge::reloadValueSteps()
+{
+    const auto numbers = [this](const char *key) {
+        QVariantList values;
+        for (const QString &entry : settingsListValue(m_settings.value(QLatin1String(key)))) {
+            bool ok = false;
+            const double value = entry.trimmed().toDouble(&ok);
+            if (ok && value > 0.0)
+                values.append(value);
+        }
+        return values;
+    };
+    const QVariantList iso = numbers("isoSteps");
+    const QVariantList shutterAngle = numbers("shutterAngleSteps");
+    const QVariantList fps = numbers("fpsSteps");
+    const QVariantList wb = numbers("wbSteps");
+    const bool flickerFree = m_settings.value(QStringLiteral("flickerFreeShutterAngles"), false).toBool();
+    const int mains = m_settings.value(QStringLiteral("mainsHz"), 50).toInt() == 60 ? 60 : 50;
+    if (iso == m_isoSteps && shutterAngle == m_shutterAngleSteps && fps == m_fpsSteps && wb == m_wbSteps
+        && flickerFree == m_flickerFreeShutterAngles && mains == m_mainsHz)
+        return;
+    m_isoSteps = iso;
+    m_shutterAngleSteps = shutterAngle;
+    m_fpsSteps = fps;
+    m_wbSteps = wb;
+    m_flickerFreeShutterAngles = flickerFree;
+    m_mainsHz = mains;
+    emit valueStepsChanged();
 }
 
 QStringList SettingsBridge::favoritesOrder() const

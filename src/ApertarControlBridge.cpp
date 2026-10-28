@@ -1454,8 +1454,11 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
     // use), held for Clear HDR, ISO on the mode's ceiling, the angle in a ramp take with the
     // Exposure policy (Core moves it with the frame rate).
     const int previousIsoMax = m_isoMax;
+    const double previousFpsMax = m_fpsMax;
     if (state.contains(QStringLiteral("iso_max")))
         m_isoMax = state.value(QStringLiteral("iso_max")).toInt(m_isoMax);
+    if (state.contains(QStringLiteral("fps_max")))
+        m_fpsMax = state.value(QStringLiteral("fps_max")).toDouble(m_fpsMax);
     if (state.contains(QStringLiteral("iso_auto_after_clear_hdr")))
         m_isoAutoAfterClearHdr = state.value(QStringLiteral("iso_auto_after_clear_hdr")).toBool(m_isoAutoAfterClearHdr);
     if (state.contains(QStringLiteral("wb_auto_after_clear_hdr")))
@@ -1474,7 +1477,7 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         const bool shutterSet = m_shutterAuto || (m_recording && m_fpsSpeedRamp && m_fpsSpeedRampKeepExposure);
         if (isoInUse != m_isoInUse || whiteBalanceInUse != m_whiteBalanceInUse || isoSet != m_isoSetByCamera ||
             whiteBalanceSet != m_whiteBalanceSetByCamera || shutterSet != m_shutterSetByCamera ||
-            m_isoMax != previousIsoMax) {
+            m_isoMax != previousIsoMax || m_fpsMax != previousFpsMax) {
             m_isoInUse = isoInUse;
             m_whiteBalanceInUse = whiteBalanceInUse;
             m_isoSetByCamera = isoSet;

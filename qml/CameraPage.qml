@@ -499,7 +499,7 @@ Item {
                                              ? ["30s", "25s", "20s", "15s", "10s", "8s", "6s", "5s", "4s", "3s", "2s", "1s", "1/2", "1/4", "1/8", "1/12", "1/15"] : [])
                                              .concat(["1/24", "1/30", "1/40", "1/48", "1/50", "1/60", "1/80", "1/100", "1/125", "1/160", "1/200", "1/250", "1/320", "1/500", "1/1000"]),
                                              root.photoTimelapseEnabled ? root.photoTimelapseSetting : "Off")
-                                         : ["Auto", "11.25°", "15°", "22.5°", "30°", "37.5°", "45°", "60°", "72°", "75°", "90°", "108°", "120°", "144°", "150°", "172.8°", "180°", "216°", "270°", "324°", "360°"]
+                                         : root.shutterAngleEntries()
     readonly property var fpsOptions: root.availableFpsOptions()
     readonly property bool losslessFourKMode: !root.photoModeEnabled && !root.imx294Detected
                                                 && root.recordingFormat === "cDNG"
@@ -515,25 +515,24 @@ Item {
     readonly property bool losslessIsoLimitedMode: root.losslessImx585Mode || root.losslessFourKMode || root.losslessTwoKMode
     // Green for values the camera sets (auto, held for Clear HDR, on a ceiling, ramp-driven).
     readonly property color cameraSetValueColor: "#00c951"
-    readonly property var isoSteps: ["Auto", "100", "200", "400", "800", "1600", "3200", "6400", "12800", "25600", "51200"]
-    // iso_max is Core's ISO ceiling for the current mode (Clear HDR, lossless cDNG), 0 = none:
-    // values up to it, the first step above lands on it, no Auto under a ceiling or in Clear HDR.
-    // With auto on, Lock freezes the gain in use.
+    // T33: the lists come from UI.conf (Core's set_value_steps); empty = these built-in lists.
+    readonly property var builtInIsoSteps: [100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200]
+    readonly property var builtInShutterAngleSteps: [11.25, 15, 22.5, 30, 37.5, 45, 60, 72, 75, 90, 108, 120, 144, 150, 172.8, 180, 216, 270, 324, 360]
+    readonly property var builtInWbSteps: [2500, 2800, 3000, 3200, 3400, 3600, 4000, 4500, 4800, 5000, 5200, 5400, 5600, 5800, 6000, 6500, 7000, 7500, 8000]
+    // isoMax is Core's ISO ceiling for the current mode (Clear HDR, lossless cDNG), 0 = none:
+    // values above it greyed, the ceiling added in green when not in the list; no Auto under a
+    // ceiling or in Clear HDR; with auto on, Lock freezes the gain in use.
     readonly property var isoOptions: {
         const maximum = root.controlBridge ? root.controlBridge.isoMax : (root.losslessIsoLimitedMode ? 800 : 0)
-        let options = root.isoSteps
-        if (maximum > 0) {
-            const values = root.isoSteps.filter(v => v !== "Auto")
-            options = values.filter(v => Number(v) <= maximum)
-            if (values.some(v => Number(v) > maximum) && options.indexOf(String(maximum)) < 0)
-                options.push(String(maximum))
-        } else if (root.clearHdrActive) {
-            options = root.isoSteps.filter(v => v !== "Auto")
-        }
-        return root.iso === "Auto" && options.indexOf("Auto") >= 0
-            ? ["Auto", "Lock"].concat(options.filter(v => v !== "Auto"))
-            : options
+        const entries = root.cappedValueEntries(root.valueSteps(settingsState ? settingsState.isoSteps : [], root.builtInIsoSteps),
+                                                maximum, v => String(Math.round(v)))
+        if (maximum > 0 || root.clearHdrActive)
+            return entries
+        return (root.iso === "Auto" ? ["Auto", "Lock"] : ["Auto"]).concat(entries)
     }
+    readonly property var wbOptions: ["Auto"].concat(root.valueSteps(settingsState ? settingsState.wbSteps : [], root.builtInWbSteps)
+                                                     .map(v => String(Math.round(v)) + "K"))
+    readonly property var fpsPickerOptions: root.fpsOptionEntries()
     // Raw takes say what the sensor delivers on the resolution line itself, same size as the
     // pixel numbers: "3840x2160 · 16 b · Clear HDR" (Patrik, 2026-10-28).
     readonly property bool rawRecordFormat: !root.photoModeEnabled && !root.processedVideoRecordFormat
@@ -835,15 +834,66 @@ function maximumSupportedFpsForResolution(resolutionValue) {
     return 60.0
 }
 
-function availableFpsOptions() {
-    var presets = root.imx477Detected
-                  ? [24.000, 25.000, 30.000, 35.000, 40.000, 45.000, 50.000, 60.000, 70.000, 80.000, 90.000, 100.000, 110.000, 120.000, 130.000, 140.000, 150.000, 160.000, 170.000, 180.000, 190.000, 200.000, 210.000, 220.000, 230.000, 240.000, 280.000]
-                  : ((root.imx577Detected)
-                     ? [24.000, 25.000, 30.000, 50.000, 60.000, 100.000]
-                     : [24.000, 25.000, 30.000, 50.000, 60.000])
+function valueSteps(list, fallback) {
+    var steps = []
+    for (var i = 0; list && i < list.length; ++i) {
+        var value = Number(list[i])
+        if (isFinite(value) && value > 0)
+            steps.push(value)
+    }
+    return steps.length > 0 ? steps : fallback
+}
+
+// Request 24: a list works on any sensor. Every value stays; values above the mode's ceiling are
+// greyed out, and the ceiling is added (camera-set, green) when it is not one of them.
+function cappedValueEntries(steps, cap, format) {
+    var entries = []
+    var added = false
+    var listed = steps.some(v => Math.abs(v - cap) < 0.0005)
+    for (var i = 0; i < steps.length; ++i) {
+        if (cap > 0 && steps[i] > cap + 0.0005 && !added && !listed) {
+            entries.push({ value: format(cap), enabled: true, cameraSet: true })
+            added = true
+        }
+        entries.push({ value: format(steps[i]), enabled: !(cap > 0) || steps[i] <= cap + 0.0005, cameraSet: false })
+    }
+    return entries
+}
+
+// Lamps on AC flicker at twice the mains frequency: angle = 360 x fps x k / (2 x mains), as Core.
+function flickerFreeShutterAngles(fps, mainsHz) {
+    var angles = []
+    if (!(fps > 0) || !(mainsHz > 0))
+        return angles
+    for (var k = 1; k <= 400; ++k) {
+        var angle = 360 * fps * k / (2 * mainsHz)
+        if (angle > 360.0005)
+            break
+        angles.push(Math.round(angle * 10) / 10)
+    }
+    return angles
+}
+
+// The operator's angles for this FPS, with the flicker-free ones merged in when switched on;
+// those not already in the list are camera-set (green).
+function shutterAngleEntries() {
+    var steps = root.valueSteps(settingsState ? settingsState.shutterAngleSteps : [], root.builtInShutterAngleSteps)
+    var entries = steps.map(v => ({ angle: v, cameraSet: false }))
+    if (settingsState && settingsState.flickerFreeShutterAngles) {
+        var added = root.flickerFreeShutterAngles(parseFloat(root.fps), settingsState.mainsHz)
+        for (var i = 0; i < added.length; ++i) {
+            if (!entries.some(e => Math.abs(e.angle - added[i]) < 0.05))
+                entries.push({ angle: added[i], cameraSet: true })
+        }
+    }
+    entries.sort((a, b) => a.angle - b.angle)
+    return ["Auto"].concat(entries.map(e => ({ value: String(Number(e.angle.toFixed(2))) + "°", enabled: true, cameraSet: e.cameraSet })))
+}
+
+function fpsCeiling() {
+    if (root.controlBridge && root.controlBridge.fpsMax > 0)
+        return root.controlBridge.fpsMax
     var max = root.maximumSupportedFpsForResolution(root.resolution)
-    if (root.h264RecordFormat && root.controlBridge && root.controlBridge.h264MaxFps > 0)
-        max = Math.min(max, root.controlBridge.h264MaxFps)
     if (!root.photoModeEnabled && root.imx477Detected && root.recordingFormat === "cDNG" && root.cdngCompressionValue === "none") {
         var normalizedResolution = root.normalizedResolutionForCurrentSensor(root.resolution)
         max = Math.min(max, root.imx477MaximumUncompressedFpsForResolution(normalizedResolution))
@@ -854,12 +904,27 @@ function availableFpsOptions() {
         max = Math.min(max, root.isApproximatelyFourThree(root.resolution) ? 24.0 : 30.0)
     else if (root.losslessTwoKMode)
         max = Math.min(max, 60.0)
-    var filtered = []
-    for (var i = 0; i < presets.length; ++i) {
-        if (presets[i] <= max + 0.0005)
-            filtered.push(root.formatFpsValue(presets[i]))
-    }
-    return filtered.length > 0 ? filtered : [root.formatFpsValue(max)]
+    return max
+}
+
+// The operator's FPS list (or the built-in one) against the mode's ceiling (Core's fps_max): the
+// entries for the picker, and the selectable values for everything else.
+function fpsOptionEntries() {
+    var presets = root.valueSteps(settingsState ? settingsState.fpsSteps : [],
+                  root.imx477Detected
+                  ? [24.000, 25.000, 30.000, 35.000, 40.000, 45.000, 50.000, 60.000, 70.000, 80.000, 90.000, 100.000, 110.000, 120.000, 130.000, 140.000, 150.000, 160.000, 170.000, 180.000, 190.000, 200.000, 210.000, 220.000, 230.000, 240.000, 280.000]
+                  : ((root.imx577Detected)
+                     ? [24.000, 25.000, 30.000, 50.000, 60.000, 100.000]
+                     : [24.000, 25.000, 30.000, 50.000, 60.000]))
+    var max = root.fpsCeiling()
+    if (root.h264RecordFormat && root.controlBridge && root.controlBridge.h264MaxFps > 0)
+        max = Math.min(max, root.controlBridge.h264MaxFps)
+    var entries = root.cappedValueEntries(presets, max, v => root.formatFpsValue(v))
+    return entries.some(e => e.enabled) ? entries : [{ value: root.formatFpsValue(max), enabled: true, cameraSet: true }]
+}
+
+function availableFpsOptions() {
+    return root.fpsOptionEntries().filter(e => e.enabled).map(e => e.value)
 }
 
 function isFourKCaptureResolution(resolutionValue) {
@@ -2946,7 +3011,7 @@ Text {
                 popupTopMargin: root.topDropdownPopupTopMargin
                 value: root.fps
                 isOpen: root.openDropdown === "fps"
-                options: root.fpsOptions
+                options: root.fpsPickerOptions
                 onToggleRequested: {
                     root.quickMenuOpen = false
                     root.quickMenuResolutionOpen = false
@@ -3057,7 +3122,7 @@ Text {
                 enabled: root.whiteBalanceAvailable
                 opacity: enabled ? 1.0 : 0.4
                 isOpen: enabled && root.openDropdown === "wb"
-                options: ["Auto", "2500K", "2800K", "3000K", "3200K", "3400K", "3600K", "4000K", "4500K", "4800K", "5000K", "5200K", "5400K", "5600K", "5800K", "6000K", "6500K", "7000K", "7500K", "8000K"]
+                options: root.wbOptions
                 onToggleRequested: {
                     root.quickMenuOpen = false
                     root.quickMenuResolutionOpen = false
