@@ -523,7 +523,7 @@ Item {
     // values above it greyed, the ceiling added in green when not in the list; no Auto under a
     // ceiling or in Clear HDR; with auto on, Lock freezes the gain in use.
     readonly property var isoOptions: {
-        const maximum = root.controlBridge ? root.controlBridge.isoMax : (root.losslessIsoLimitedMode ? 800 : 0)
+        const maximum = root.controlBridge ? root.controlBridge.isoMax : (root.losslessIsoLimitedMode ? 1600 : 0)
         const entries = root.cappedValueEntries(root.valueSteps(settingsState ? settingsState.isoSteps : [], root.builtInIsoSteps),
                                                 maximum, v => String(Math.round(v)))
         if (maximum > 0 || root.clearHdrActive)
