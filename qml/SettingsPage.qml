@@ -3310,7 +3310,7 @@ Item {
                 InlineDropdownField {
                     width: (parent.width - 12) / 2
                     visible: root.cdngRecordFormat
-                    label: "Compression"
+                    label: apertarControlBridge && apertarControlBridge.ladderActive ? "Compression (set by Mode Ladder)" : "Compression"
                     value: apertarControlBridge ? apertarControlBridge.cdngCompression : "none"
                     displayValue: value === "lossless_jpeg" ? "Lossless JPEG"
                                   : (value === "lossy_3to1" ? "Lossy 3:1"
@@ -3321,6 +3321,7 @@ Item {
                         { value: "lossy_5to1", label: "Lossy 5:1" }
                     ] : [])
                     fieldEnabled: apertarControlBridge && !apertarControlBridge.recording && apertarControlBridge.rawCompressionSupported
+                                  && !apertarControlBridge.ladderActive
                     popupParent: dropdownOverlay
                     dropdownController: sharedDropdownController
                     onValueSelected: function(v) { apertarControlBridge.applyCdngCompression(v) }

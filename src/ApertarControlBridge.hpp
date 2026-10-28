@@ -18,6 +18,7 @@ class ApertarControlBridge : public QObject
     // Values the camera sets rather than the operator (shown green), from Core's state.
     Q_PROPERTY(int isoMax READ isoMax NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(double fpsMax READ fpsMax NOTIFY cameraSetValuesChanged)
+    Q_PROPERTY(bool ladderActive READ ladderActive NOTIFY cameraSetValuesChanged)   // the mode ladder picks the mode and the compression
     Q_PROPERTY(QString isoInUse READ isoInUse NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(QString whiteBalanceInUse READ whiteBalanceInUse NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(bool isoSetByCamera READ isoSetByCamera NOTIFY cameraSetValuesChanged)
@@ -77,6 +78,7 @@ public:
     bool whiteBalanceAvailable() const { return m_whiteBalanceAvailable; }
     int isoMax() const { return m_isoMax; }
     double fpsMax() const { return m_fpsMax; }
+    bool ladderActive() const { return m_ladderActive; }
     QString isoInUse() const { return m_isoInUse; }
     QString whiteBalanceInUse() const { return m_whiteBalanceInUse; }
     bool isoSetByCamera() const { return m_isoSetByCamera; }
@@ -338,6 +340,7 @@ private:
     bool m_whiteBalanceAutoAfterClearHdr = false;
     int m_isoMax = 0;
     double m_fpsMax = 0.0;
+    bool m_ladderActive = false;
     QString m_isoInUse;
     QString m_whiteBalanceInUse;
     bool m_isoSetByCamera = false;

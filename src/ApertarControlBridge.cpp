@@ -1456,6 +1456,9 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
     // the operator's lists).
     const int previousIsoMax = m_isoMax;
     const double previousFpsMax = m_fpsMax;
+    const bool previousLadderActive = m_ladderActive;
+    if (state.contains(QStringLiteral("ladder_active")))
+        m_ladderActive = state.value(QStringLiteral("ladder_active")).toBool(m_ladderActive);
     if (state.contains(QStringLiteral("iso_max")))
         m_isoMax = state.value(QStringLiteral("iso_max")).toInt(m_isoMax);
     if (state.contains(QStringLiteral("fps_max")))
@@ -1478,7 +1481,7 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         const bool shutterSet = m_recording && m_fpsSpeedRamp && m_fpsSpeedRampKeepExposure;
         if (isoInUse != m_isoInUse || whiteBalanceInUse != m_whiteBalanceInUse || isoSet != m_isoSetByCamera ||
             whiteBalanceSet != m_whiteBalanceSetByCamera || shutterSet != m_shutterSetByCamera ||
-            m_isoMax != previousIsoMax || m_fpsMax != previousFpsMax) {
+            m_isoMax != previousIsoMax || m_fpsMax != previousFpsMax || m_ladderActive != previousLadderActive) {
             m_isoInUse = isoInUse;
             m_whiteBalanceInUse = whiteBalanceInUse;
             m_isoSetByCamera = isoSet;
