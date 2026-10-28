@@ -6,6 +6,9 @@ Item {
     FontLoader { id: interRegular; source: "qrc:/qml/fonts/Inter/Inter-Regular.ttf" }
 
     property string value: ""
+    // Shown instead of value when set (e.g. the ISO auto is using); value stays the selection.
+    property string displayValue: ""
+    property color valueColor: "white"
     property bool isOpen: false
     property var options: []
     property real maxPopupHeight: 340
@@ -31,8 +34,8 @@ Item {
         anchors.bottom: parent.bottom
         anchors.leftMargin: 16
         anchors.bottomMargin: 11
-        text: root.value
-        color: "white"
+        text: root.displayValue.length > 0 ? root.displayValue : root.value
+        color: root.valueColor
         font.family: interRegular.font.family
         font.pixelSize: root.valueFontSize
         renderType: Text.NativeRendering

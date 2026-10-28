@@ -16,6 +16,8 @@ namespace {
 
 constexpr int kReconnectPollIntervalMs = 1000;
 constexpr int kSteadyStatePollIntervalMs = 30000;
+// While auto ISO or auto WB runs the screen shows the value in use, which only get_state carries.
+constexpr int kLiveValuePollIntervalMs = 1000;
 
 bool isAutoSelection(const QString &displayValue)
 {
@@ -297,6 +299,14 @@ bool ApertarControlBridge::applyFps(const QString &displayValue)
 
 bool ApertarControlBridge::applyIso(const QString &displayValue)
 {
+    // Lock: auto off at the gain in use; the reply carries the locked ISO.
+    if (displayValue == QStringLiteral("Lock")) {
+        if (!sendCoreCommand(QStringLiteral("set_iso_auto"), QJsonObject{{QStringLiteral("enabled"), QStringLiteral("false")}}))
+            return false;
+        saveCurrentCameraSettings();
+        return true;
+    }
+
     if (isAutoSelection(displayValue)) {
         if (!sendCoreCommand(QStringLiteral("set_iso_auto")))
             return false;
@@ -898,7 +908,7 @@ void ApertarControlBridge::updateRefreshTimer()
         || !m_connected;
     m_retryTimer.setInterval(needsFastPolling
                              ? kReconnectPollIntervalMs
-                             : kSteadyStatePollIntervalMs);
+                             : (m_isoAuto || m_whiteBalanceAuto ? kLiveValuePollIntervalMs : kSteadyStatePollIntervalMs));
 }
 
 void ApertarControlBridge::loadPersistedCameraSettings()
@@ -1438,6 +1448,41 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         const int kelvin = qRound(state.value(QStringLiteral("wb_kelvin")).toDouble(parseWhiteBalanceValue(m_whiteBalance)));
         if (kelvin > 0)
             setWhiteBalance(QString::number(kelvin) + QStringLiteral("K"));
+    }
+
+    // Values the camera sets rather than the operator, shown green: auto (with the value in
+    // use), held for Clear HDR, ISO on the mode's ceiling, the angle in a ramp take with the
+    // Exposure policy (Core moves it with the frame rate).
+    const int previousIsoMax = m_isoMax;
+    if (state.contains(QStringLiteral("iso_max")))
+        m_isoMax = state.value(QStringLiteral("iso_max")).toInt(m_isoMax);
+    if (state.contains(QStringLiteral("iso_auto_after_clear_hdr")))
+        m_isoAutoAfterClearHdr = state.value(QStringLiteral("iso_auto_after_clear_hdr")).toBool(m_isoAutoAfterClearHdr);
+    if (state.contains(QStringLiteral("wb_auto_after_clear_hdr")))
+        m_whiteBalanceAutoAfterClearHdr = state.value(QStringLiteral("wb_auto_after_clear_hdr")).toBool(m_whiteBalanceAutoAfterClearHdr);
+    if (state.contains(QStringLiteral("fps_speed_ramp_keep_exposure")))
+        m_fpsSpeedRampKeepExposure = state.value(QStringLiteral("fps_speed_ramp_keep_exposure")).toBool(m_fpsSpeedRampKeepExposure);
+    {
+        const int isoActual = state.value(QStringLiteral("iso_actual")).toInt(0);
+        const QString isoInUse = !m_isoAuto ? QString() : (isoActual > 0 ? QString::number(isoActual) : m_isoInUse);
+        const int kelvinActual = qRound(state.value(QStringLiteral("wb_actual_kelvin")).toDouble(0.0));
+        const QString whiteBalanceInUse = !m_whiteBalanceAuto ? QString()
+            : (state.value(QStringLiteral("wb_measured")).toBool(false) && kelvinActual > 0
+                   ? QString::number(kelvinActual) + QStringLiteral("K") : m_whiteBalanceInUse);
+        const bool isoSet = m_isoAuto || m_isoAutoAfterClearHdr || (m_isoMax > 0 && qRound(parseIsoValue(m_iso)) == m_isoMax);
+        const bool whiteBalanceSet = m_whiteBalanceAuto || m_whiteBalanceAutoAfterClearHdr;
+        const bool shutterSet = m_shutterAuto || (m_recording && m_fpsSpeedRamp && m_fpsSpeedRampKeepExposure);
+        if (isoInUse != m_isoInUse || whiteBalanceInUse != m_whiteBalanceInUse || isoSet != m_isoSetByCamera ||
+            whiteBalanceSet != m_whiteBalanceSetByCamera || shutterSet != m_shutterSetByCamera ||
+            m_isoMax != previousIsoMax) {
+            m_isoInUse = isoInUse;
+            m_whiteBalanceInUse = whiteBalanceInUse;
+            m_isoSetByCamera = isoSet;
+            m_whiteBalanceSetByCamera = whiteBalanceSet;
+            m_shutterSetByCamera = shutterSet;
+            emit cameraSetValuesChanged();
+        }
+        updateRefreshTimer();
     }
 
     if (state.contains(QStringLiteral("width")) && state.contains(QStringLiteral("height"))) {

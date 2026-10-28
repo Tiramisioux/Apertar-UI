@@ -92,12 +92,16 @@ Window {
     readonly property string fpsValue: apertarControlBridge && apertarControlBridge.fps.length > 0
                                       ? apertarControlBridge.fps
                                       : "24.000"
-    readonly property string isoValue: apertarControlBridge && apertarControlBridge.iso.length > 0
-                                      ? apertarControlBridge.iso
-                                      : "800"
-    readonly property string wbValue: apertarControlBridge && apertarControlBridge.whiteBalance.length > 0
-                                     ? apertarControlBridge.whiteBalance
-                                     : "5600K"
+    readonly property string isoValue: apertarControlBridge && apertarControlBridge.isoInUse.length > 0
+                                      ? apertarControlBridge.isoInUse
+                                      : (apertarControlBridge && apertarControlBridge.iso.length > 0
+                                         ? apertarControlBridge.iso
+                                         : "800")
+    readonly property string wbValue: apertarControlBridge && apertarControlBridge.whiteBalanceInUse.length > 0
+                                     ? apertarControlBridge.whiteBalanceInUse
+                                     : (apertarControlBridge && apertarControlBridge.whiteBalance.length > 0
+                                        ? apertarControlBridge.whiteBalance
+                                        : "5600K")
     readonly property string resolutionValue: apertarControlBridge && apertarControlBridge.resolution.length > 0
                                              ? apertarControlBridge.resolution
                                              : "1920x1080"
@@ -163,9 +167,9 @@ Window {
     readonly property var topMonitorInfoItems: [
         { label: "FORMAT", value: root.formatInfoValue },
         { label: "FPS", value: root.fpsValue },
-        { label: "ISO", value: root.isoValue },
-        { label: "SHUTTER", value: root.shutterDisplayValue },
-        { label: "WB", value: root.wbValue }
+        { label: "ISO", value: root.isoValue, cameraSet: !!apertarControlBridge && apertarControlBridge.isoSetByCamera },
+        { label: "SHUTTER", value: root.shutterDisplayValue, cameraSet: !!apertarControlBridge && apertarControlBridge.shutterSetByCamera },
+        { label: "WB", value: root.wbValue, cameraSet: !!apertarControlBridge && apertarControlBridge.whiteBalanceSetByCamera }
     ]
     property int timecodeFrames: 0
     property string localTimecode: "00:00:00:00"
@@ -859,7 +863,8 @@ Window {
                             Text {
                                 id: valueText
                                 text: modelData.value
-                                color: "white"
+                                // Green: a value the camera sets (auto, held for Clear HDR, ceiling, ramp).
+                                color: modelData.cameraSet ? "#00c951" : "white"
                                 font.family: interBold.font.family
                                 font.pixelSize: 34
                                 style: Text.Outline

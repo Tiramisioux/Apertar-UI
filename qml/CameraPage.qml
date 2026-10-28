@@ -513,9 +513,27 @@ Item {
                                                && root.recordingFormat === "cDNG"
                                                && root.cdngCompressionValue === "lossless_jpeg"
     readonly property bool losslessIsoLimitedMode: root.losslessImx585Mode || root.losslessFourKMode || root.losslessTwoKMode
-    readonly property var isoOptions: root.losslessIsoLimitedMode
-                                      ? ["100", "200", "400", "800"]
-                                      : ["Auto", "100", "200", "400", "800", "1600", "3200", "6400", "12800", "25600", "51200"]
+    // Green for values the camera sets (auto, held for Clear HDR, on a ceiling, ramp-driven).
+    readonly property color cameraSetValueColor: "#00c951"
+    readonly property var isoSteps: ["Auto", "100", "200", "400", "800", "1600", "3200", "6400", "12800", "25600", "51200"]
+    // iso_max is Core's ISO ceiling for the current mode (Clear HDR, lossless cDNG), 0 = none:
+    // values up to it, the first step above lands on it, no Auto under a ceiling or in Clear HDR.
+    // With auto on, Lock freezes the gain in use.
+    readonly property var isoOptions: {
+        const maximum = root.controlBridge ? root.controlBridge.isoMax : (root.losslessIsoLimitedMode ? 800 : 0)
+        let options = root.isoSteps
+        if (maximum > 0) {
+            const values = root.isoSteps.filter(v => v !== "Auto")
+            options = values.filter(v => Number(v) <= maximum)
+            if (values.some(v => Number(v) > maximum) && options.indexOf(String(maximum)) < 0)
+                options.push(String(maximum))
+        } else if (root.clearHdrActive) {
+            options = root.isoSteps.filter(v => v !== "Auto")
+        }
+        return root.iso === "Auto" && options.indexOf("Auto") >= 0
+            ? ["Auto", "Lock"].concat(options.filter(v => v !== "Auto"))
+            : options
+    }
     readonly property string formatDisplayValue: root.processedVideoRecordFormat
                                                  ? root.h264OutputResolutionValue
                                                  : root.resolution
@@ -2952,6 +2970,8 @@ Text {
                 popupRadius: root.topDropdownPopupRadius
                 popupTopMargin: root.topDropdownPopupTopMargin
                 value: root.iso
+                displayValue: root.controlBridge ? root.controlBridge.isoInUse : ""
+                valueColor: root.controlBridge && root.controlBridge.isoSetByCamera ? root.cameraSetValueColor : "white"
                 isOpen: root.openDropdown === "iso"
                 options: root.isoOptions
                 onToggleRequested: {
@@ -2984,6 +3004,7 @@ Text {
                 popupRadius: root.topDropdownPopupRadius
                 popupTopMargin: root.topDropdownPopupTopMargin
                 value: root.shutterDisplayValue
+                valueColor: root.controlBridge && root.controlBridge.shutterSetByCamera ? root.cameraSetValueColor : "white"
                 isOpen: root.openDropdown === "shutter"
                 options: root.shutterOptions
                 onToggleRequested: {
@@ -3024,6 +3045,8 @@ Text {
                 popupRadius: root.topDropdownPopupRadius
                 popupTopMargin: root.topDropdownPopupTopMargin
                 value: root.wb
+                displayValue: root.controlBridge ? root.controlBridge.whiteBalanceInUse : ""
+                valueColor: root.controlBridge && root.controlBridge.whiteBalanceSetByCamera ? root.cameraSetValueColor : "white"
                 enabled: root.whiteBalanceAvailable
                 opacity: enabled ? 1.0 : 0.4
                 isOpen: enabled && root.openDropdown === "wb"

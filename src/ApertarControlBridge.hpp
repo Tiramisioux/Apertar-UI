@@ -15,6 +15,13 @@ class ApertarControlBridge : public QObject
 
     Q_PROPERTY(QString fps READ fps NOTIFY fpsChanged)
     Q_PROPERTY(QString iso READ iso NOTIFY isoChanged)
+    // Values the camera sets rather than the operator (shown green), from Core's state.
+    Q_PROPERTY(int isoMax READ isoMax NOTIFY cameraSetValuesChanged)
+    Q_PROPERTY(QString isoInUse READ isoInUse NOTIFY cameraSetValuesChanged)
+    Q_PROPERTY(QString whiteBalanceInUse READ whiteBalanceInUse NOTIFY cameraSetValuesChanged)
+    Q_PROPERTY(bool isoSetByCamera READ isoSetByCamera NOTIFY cameraSetValuesChanged)
+    Q_PROPERTY(bool whiteBalanceSetByCamera READ whiteBalanceSetByCamera NOTIFY cameraSetValuesChanged)
+    Q_PROPERTY(bool shutterSetByCamera READ shutterSetByCamera NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(QString shutterAngle READ shutterAngle NOTIFY shutterAngleChanged)
     Q_PROPERTY(QString shutterSpeed READ shutterSpeed NOTIFY shutterSpeedChanged)
     Q_PROPERTY(QString whiteBalance READ whiteBalance NOTIFY whiteBalanceChanged)
@@ -67,6 +74,12 @@ public:
     QString shutterSpeed() const;
     QString whiteBalance() const;
     bool whiteBalanceAvailable() const { return m_whiteBalanceAvailable; }
+    int isoMax() const { return m_isoMax; }
+    QString isoInUse() const { return m_isoInUse; }
+    QString whiteBalanceInUse() const { return m_whiteBalanceInUse; }
+    bool isoSetByCamera() const { return m_isoSetByCamera; }
+    bool whiteBalanceSetByCamera() const { return m_whiteBalanceSetByCamera; }
+    bool shutterSetByCamera() const { return m_shutterSetByCamera; }
     double exposureCompensation() const { return m_exposureCompensation; }
     bool exposureCompensationAvailable() const { return m_exposureCompensationAvailable; }
     bool autoExposureEnabled() const { return m_isoAuto || m_shutterAuto; }
@@ -152,6 +165,7 @@ signals:
     void shutterSpeedChanged();
     void whiteBalanceChanged();
     void whiteBalanceAvailableChanged();
+    void cameraSetValuesChanged();
     void exposureCompensationChanged();
     void exposureMeteringChanged();
     void resolutionChanged();
@@ -317,6 +331,15 @@ private:
     bool m_recording = false;
     bool m_fpsSpeedRamp = false; // Core's fps_speed_ramp (T31): FPS may change during a raw take
     bool m_soundRecording = false; // a sound-only take: recording, but not the camera
+    bool m_fpsSpeedRampKeepExposure = false;
+    bool m_isoAutoAfterClearHdr = false;
+    bool m_whiteBalanceAutoAfterClearHdr = false;
+    int m_isoMax = 0;
+    QString m_isoInUse;
+    QString m_whiteBalanceInUse;
+    bool m_isoSetByCamera = false;
+    bool m_whiteBalanceSetByCamera = false;
+    bool m_shutterSetByCamera = false;
     bool m_recordingHasDroppedFrames = false;
     bool m_standby = false;
     QString m_coreMediaState;
