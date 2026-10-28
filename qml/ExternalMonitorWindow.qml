@@ -109,7 +109,7 @@ Window {
                                             && root.recordingFormatValue !== "H.264"
     readonly property string resolutionLineValue: root.resolutionValue
                                                   + (root.rawRecordFormat && root.rawBitDepthValue.length > 0
-                                                     ? " · " + root.rawBitDepthValue.replace("-bit", " b")
+                                                     ? " · " + root.rawBitDepthValue
                                                        + (!!apertarControlBridge && apertarControlBridge.clearHdr ? " · Clear HDR" : "")
                                                      : "")
     readonly property string resolutionValue: apertarControlBridge && apertarControlBridge.resolution.length > 0
