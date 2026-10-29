@@ -1831,7 +1831,7 @@ function toggleTimecodeMode() {
     if (root.settingsState)
         root.settingsState.timecodeMode = nextMode
     if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
-        apertarControlBridge.applyTimecodeMode(nextMode)
+        apertarControlBridge.applyTimecodeMode(nextMode, "ui")
 }
 
 function falseColorModeToInt(mode) {

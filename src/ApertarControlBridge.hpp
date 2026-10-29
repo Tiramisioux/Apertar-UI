@@ -18,6 +18,7 @@ class ApertarControlBridge : public QObject
     // Values the camera sets rather than the operator (shown green), from Core's state.
     Q_PROPERTY(int isoMax READ isoMax NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(double fpsMax READ fpsMax NOTIFY cameraSetValuesChanged)
+    Q_PROPERTY(QString fileTimecodeMode READ fileTimecodeMode NOTIFY fileTimecodeModeChanged)   // Core's timecode for the clips and the audio ("Free Run" / "Rec Run")
     Q_PROPERTY(bool ladderActive READ ladderActive NOTIFY cameraSetValuesChanged)   // the mode ladder picks the mode and the compression
     Q_PROPERTY(QString isoInUse READ isoInUse NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(QString whiteBalanceInUse READ whiteBalanceInUse NOTIFY cameraSetValuesChanged)
@@ -79,6 +80,7 @@ public:
     int isoMax() const { return m_isoMax; }
     double fpsMax() const { return m_fpsMax; }
     bool ladderActive() const { return m_ladderActive; }
+    QString fileTimecodeMode() const { return m_fileTimecodeMode; }
     QString isoInUse() const { return m_isoInUse; }
     QString whiteBalanceInUse() const { return m_whiteBalanceInUse; }
     bool isoSetByCamera() const { return m_isoSetByCamera; }
@@ -144,7 +146,8 @@ public:
     Q_INVOKABLE bool applyRawBitDepth(const QString &displayValue);
     Q_INVOKABLE bool applyClearHdr(bool enabled);
     Q_INVOKABLE bool applyH264Resolution(const QString &displayValue);
-    Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue);
+    // target: "ui" (what the screens show), "files" (the clips and the audio) or "both"
+    Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue, const QString &target);
     Q_INVOKABLE bool applyAutofocusMode(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusRange(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusSpeed(const QString &displayValue);
@@ -186,6 +189,7 @@ signals:
     void h264ResolutionChanged();
     void sensorNameChanged();
     void autofocusModeChanged();
+    void fileTimecodeModeChanged();
     void autofocusRangeChanged();
     void autofocusSpeedChanged();
     void autofocusWindowChanged();
@@ -341,6 +345,7 @@ private:
     int m_isoMax = 0;
     double m_fpsMax = 0.0;
     bool m_ladderActive = false;
+    QString m_fileTimecodeMode = QStringLiteral("Free Run");
     QString m_isoInUse;
     QString m_whiteBalanceInUse;
     bool m_isoSetByCamera = false;

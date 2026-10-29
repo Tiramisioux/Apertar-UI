@@ -649,19 +649,26 @@ bool ApertarControlBridge::applyH264Resolution(const QString &displayValue)
     return true;
 }
 
-bool ApertarControlBridge::applyTimecodeMode(const QString &displayValue)
+bool ApertarControlBridge::applyTimecodeMode(const QString &displayValue, const QString &target)
 {
     const QString normalized = parseTimecodeModeValue(displayValue);
-    if (normalized.isEmpty()) {
+    if (normalized.isEmpty() || (target != QLatin1String("ui") && target != QLatin1String("files") && target != QLatin1String("both"))) {
         setLastError(QStringLiteral("Invalid timecode mode value."));
         return false;
     }
 
-    if (!sendCoreCommand(QStringLiteral("set_timecode_mode"), { { QStringLiteral("value"), normalized } }))
+    if (!sendCoreCommand(QStringLiteral("set_timecode_mode"),
+                         { { QStringLiteral("value"), normalized }, { QStringLiteral("target"), target } }))
         return false;
 
-    m_settings.setValue(QStringLiteral("timecodeMode"), displayValue);
-    m_settings.sync();
+    if (target != QLatin1String("files")) {
+        m_settings.setValue(QStringLiteral("timecodeMode"), displayValue);
+        m_settings.sync();
+    }
+    if (target != QLatin1String("ui") && m_fileTimecodeMode != displayValue) {
+        m_fileTimecodeMode = displayValue;
+        emit fileTimecodeModeChanged();
+    }
     return true;
 }
 
@@ -1571,8 +1578,11 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         const QString displayValue = normalized == QStringLiteral("rec_run")
             ? QStringLiteral("Rec Run")
             : QStringLiteral("Free Run");
-        m_settings.setValue(QStringLiteral("timecodeMode"), displayValue);
-        m_settings.sync();
+        // Core's mode is the files' timecode; the UI's own copy (timecodeMode) is set apart.
+        if (m_fileTimecodeMode != displayValue) {
+            m_fileTimecodeMode = displayValue;
+            emit fileTimecodeModeChanged();
+        }
     }
 
     if (state.contains(QStringLiteral("af_mode")))

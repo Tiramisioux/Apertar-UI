@@ -3832,7 +3832,7 @@ Item {
 
             InlineDropdownField {
                 width: parent.width
-                label: "Mode"
+                label: "UI timecode"
                 value: root.settingsState ? root.settingsState.timecodeMode : "Free Run"
                 options: ["Free Run", "Rec Run"]
                 openUpwards: true
@@ -3842,7 +3842,21 @@ Item {
                     if (root.settingsState)
                         root.settingsState.timecodeMode = v
                     if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
-                        apertarControlBridge.applyTimecodeMode(v)
+                        apertarControlBridge.applyTimecodeMode(v, "ui")
+                }
+            }
+
+            InlineDropdownField {
+                width: parent.width
+                label: "File timecode"
+                value: (typeof apertarControlBridge !== "undefined" && apertarControlBridge) ? apertarControlBridge.fileTimecodeMode : "Free Run"
+                options: ["Free Run", "Rec Run"]
+                openUpwards: true
+                popupParent: dropdownOverlay
+                dropdownController: sharedDropdownController
+                onValueSelected: function(v) {
+                    if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
+                        apertarControlBridge.applyTimecodeMode(v, "files")
                 }
             }
         }
