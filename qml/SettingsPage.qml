@@ -15,6 +15,9 @@ Item {
     property string selectedSection: "Monitoring"
     property var settingsState
     readonly property var bracketEvLabels: ["1/3 EV", "2/3 EV", "1 EV", "1 1/3 EV", "1 2/3 EV", "2 EV", "2 1/3 EV", "2 2/3 EV", "3 EV"]
+    // The timecode modes as shown. The stored values stay "Free Run" and "Rec Run" (CameraPage and the bridge compare
+    // them); the names say what the camera does: the clock's time of day, or each clip from 00:00:00:00.
+    readonly property var timecodeChoices: [{ value: "Free Run", label: "Time of Day" }, { value: "Rec Run", label: "Clip" }]
     property string displayLayout: "square"
     property bool pageOpen: false
     readonly property bool landscapeCompactLayout: displayLayout === "landscape_compact"
@@ -1200,6 +1203,10 @@ Item {
         }
 
         return out
+    }
+
+    function timecodeDisplayName(mode) {
+        return mode === "Rec Run" ? "Clip" : "Time of Day"
     }
 
     function itemIsFavorited(itemId) {
@@ -3824,7 +3831,7 @@ Item {
             property string reorderSectionName: "Record"
             title: "Timecode"
             titleIconSource: "qrc:/qml/icons/timecode.png"
-            description: "Timecode behavior"
+            description: "Time of Day is the camera's clock; Clip counts each clip from 00:00:00:00"
             favoriteEnabled: root.favoriteControlsEnabled
             favorited: root.itemIsFavorited("timecode")
             onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
@@ -3834,7 +3841,8 @@ Item {
                 width: parent.width
                 label: "UI timecode"
                 value: root.settingsState ? root.settingsState.timecodeMode : "Free Run"
-                options: ["Free Run", "Rec Run"]
+                displayValue: root.timecodeDisplayName(value)
+                options: root.timecodeChoices
                 openUpwards: true
                 popupParent: dropdownOverlay
                 dropdownController: sharedDropdownController
@@ -3850,7 +3858,8 @@ Item {
                 width: parent.width
                 label: "File timecode"
                 value: (typeof apertarControlBridge !== "undefined" && apertarControlBridge) ? apertarControlBridge.fileTimecodeMode : "Free Run"
-                options: ["Free Run", "Rec Run"]
+                displayValue: root.timecodeDisplayName(value)
+                options: root.timecodeChoices
                 openUpwards: true
                 popupParent: dropdownOverlay
                 dropdownController: sharedDropdownController
