@@ -49,13 +49,13 @@ public:
 private:
     void loadConfiguration();
 
-    int m_uiWidth = 720;
-    int m_uiHeight = 720;
-    QString m_uiLayout = QStringLiteral("square");
+    int m_uiWidth = 1920;
+    int m_uiHeight = 1080;
+    QString m_uiLayout = QStringLiteral("landscape_large");
     int m_uiRotationDegrees = 0;
     double m_controlsOpacity = 1.0;
     double m_zoomToggleFactor = 4.0;
     bool m_windowed = false;
-    bool m_hdmiExternalOnly = false;
+    bool m_hdmiExternalOnly = true;
     QString m_configPath;
 };

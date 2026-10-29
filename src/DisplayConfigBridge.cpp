@@ -8,8 +8,8 @@
 
 namespace {
 
-constexpr int kDefaultUiWidth = 720;
-constexpr int kDefaultUiHeight = 720;
+constexpr int kDefaultUiWidth = 1920;
+constexpr int kDefaultUiHeight = 1080;
 constexpr int kDefaultUiRotationDegrees = 0;
 constexpr double kDefaultControlsOpacity = 1.0;
 constexpr double kDefaultZoomToggleFactor = 4.0;
@@ -286,12 +286,12 @@ void DisplayConfigBridge::loadConfiguration()
 {
     m_uiWidth = kDefaultUiWidth;
     m_uiHeight = kDefaultUiHeight;
-    m_uiLayout = QStringLiteral("square");
+    m_uiLayout = QStringLiteral("landscape_large");
     m_uiRotationDegrees = kDefaultUiRotationDegrees;
     m_controlsOpacity = kDefaultControlsOpacity;
     m_zoomToggleFactor = kDefaultZoomToggleFactor;
     m_windowed = false;
-    m_hdmiExternalOnly = false;
+    m_hdmiExternalOnly = true;
     m_configPath.clear();
 
     const QStringList candidates = hardwareConfigCandidatePaths();
@@ -354,7 +354,7 @@ void DisplayConfigBridge::loadConfiguration()
         m_hdmiExternalOnly = readConfigBool(settings,
                                            {QStringLiteral("hdmi_external_only"),
                                             QStringLiteral("hdmiExternalOnly")},
-                                           false);
+                                           true);
         settings.endGroup();
         m_configPath = path;
         break;
