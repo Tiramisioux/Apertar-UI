@@ -837,7 +837,8 @@ Item {
         "camera",
         "sbc",
         "systemInfo",
-        "systemDrive"
+        "systemDrive",
+        "controls"
     ]
     readonly property var defaultSidebarOrder: [
         "Favorites",
@@ -889,7 +890,8 @@ Item {
         "camera",
         "sbc",
         "systemInfo",
-        "systemDrive"
+        "systemDrive",
+        "controls"
     ]
     property bool favoriteControlsEnabled: false
     property bool favoriteManagerOpen: false
@@ -1133,6 +1135,7 @@ Item {
             if (itemId === "sbc") return "SBC"
             if (itemId === "systemInfo") return "System"
             if (itemId === "systemDrive") return "System Drive"
+            if (itemId === "controls") return "Controls"
         }
         if (section === "Favorites")
             return root.sectionItemTitle(root.sourceSectionForItemId(itemId), itemId)
@@ -2390,6 +2393,7 @@ Item {
         if (itemId === "sbc") return infoSbcComponent
         if (itemId === "systemInfo") return infoSystemComponent
         if (itemId === "systemDrive") return infoSystemDriveComponent
+        if (itemId === "controls") return infoControlsComponent
         return null
     }
 
@@ -6194,6 +6198,32 @@ Item {
                 detail: deviceInfoBridge.systemStorageFreeText
                         + " free • Mounted at "
                         + deviceInfoBridge.systemStorageMountPoint
+            }
+        }
+    }
+
+    // T45: read-only. What Core's check of the hardware file says; buttons, knobs and devices are edited in the WebUI.
+    Component {
+        id: infoControlsComponent
+
+        SystemSectionCard {
+            property string reorderSectionName: "Info"
+            title: "Controls"
+            description: "Buttons, switches, knobs and I2C devices. Edit them in the WebUI: Settings, Controls."
+            favoriteEnabled: root.favoriteControlsEnabled
+            favorited: root.itemIsFavorited("controls")
+            onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
+            onFavoriteToggleRequested: root.toggleFavoriteItem("controls")
+
+            InfoDataRow {
+                label: "Hardware file"
+                value: !apertarControlBridge ? "Unavailable"
+                       : apertarControlBridge.controlsErrors > 0
+                         ? apertarControlBridge.controlsErrors + (apertarControlBridge.controlsErrors === 1 ? " error" : " errors")
+                         : apertarControlBridge.controlsWarnings > 0
+                           ? apertarControlBridge.controlsWarnings + (apertarControlBridge.controlsWarnings === 1 ? " warning" : " warnings")
+                           : "No problems found"
+                detail: "WebUI: http://" + deviceInfoBridge.ipAddress + ":8000, Settings, Controls"
             }
         }
     }

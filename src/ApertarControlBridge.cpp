@@ -1231,6 +1231,10 @@ void ApertarControlBridge::applyCoreMessage(const QJsonObject &message)
         applyCoreState(message);
         return;
     }
+    if (event == QStringLiteral("controls")) {
+        setControlsStatus(message, QStringLiteral("errors"), QStringLiteral("warnings"));
+        return;
+    }
     if (event == QStringLiteral("media")) {
         setCoreMediaState(message.value(QStringLiteral("state")).toString(),
                           message.value(QStringLiteral("mounted")).toBool(true));
@@ -1314,8 +1318,22 @@ void ApertarControlBridge::setCoreMediaState(const QString &state, bool alive)
     emit coreMediaStateChanged(state, alive);
 }
 
+void ApertarControlBridge::setControlsStatus(const QJsonObject &object, const QString &errorsKey, const QString &warningsKey)
+{
+    if (!object.contains(errorsKey))
+        return;
+    const int errors = object.value(errorsKey).toInt(0);
+    const int warnings = object.value(warningsKey).toInt(0);
+    if (errors == m_controlsErrors && warnings == m_controlsWarnings)
+        return;
+    m_controlsErrors = errors;
+    m_controlsWarnings = warnings;
+    emit controlsStatusChanged();
+}
+
 void ApertarControlBridge::applyCoreState(const QJsonObject &state)
 {
+    setControlsStatus(state, QStringLiteral("controls_errors"), QStringLiteral("controls_warnings"));
     if (state.contains(QStringLiteral("media_state")))
         setCoreMediaState(state.value(QStringLiteral("media_state")).toString(),
                           state.value(QStringLiteral("media_alive")).toBool(true));

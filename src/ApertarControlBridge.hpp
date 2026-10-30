@@ -58,6 +58,9 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(QString autofocusWindow READ autofocusWindow NOTIFY autofocusWindowChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
     Q_PROPERTY(bool recordingHasDroppedFrames READ recordingHasDroppedFrames NOTIFY recordingHealthChanged)
+    // T45: what Core's validator finds in ~/apertar-hardware.conf (get_state, and the "controls" event after a save).
+    Q_PROPERTY(int controlsErrors READ controlsErrors NOTIFY controlsStatusChanged)
+    Q_PROPERTY(int controlsWarnings READ controlsWarnings NOTIFY controlsStatusChanged)
     Q_PROPERTY(bool standby READ standby NOTIFY standbyChanged)
     Q_PROPERTY(bool timelapseActive READ timelapseActive NOTIFY timelapseActiveChanged)
     Q_PROPERTY(qulonglong timelapseShotCount READ timelapseShotCount NOTIFY timelapseShotCountChanged)
@@ -115,6 +118,8 @@ public:
     QString autofocusWindow() const;
     bool recording() const;
     bool recordingHasDroppedFrames() const { return m_recordingHasDroppedFrames; }
+    int controlsErrors() const { return m_controlsErrors; }
+    int controlsWarnings() const { return m_controlsWarnings; }
     bool standby() const { return m_standby; }
     Q_INVOKABLE bool enterStandby();
     Q_INVOKABLE bool wakeFromStandby();
@@ -195,6 +200,7 @@ signals:
     void autofocusWindowChanged();
     void recordingChanged();
     void recordingHealthChanged();
+    void controlsStatusChanged();
     void standbyChanged();
     // Core's media watcher state, from the "media" event and get_state.
     void coreMediaStateChanged(const QString &state, bool alive);
@@ -352,6 +358,9 @@ private:
     bool m_whiteBalanceSetByCamera = false;
     bool m_shutterSetByCamera = false;
     bool m_recordingHasDroppedFrames = false;
+    int m_controlsErrors = 0;
+    int m_controlsWarnings = 0;
+    void setControlsStatus(const QJsonObject &object, const QString &errorsKey, const QString &warningsKey);
     bool m_standby = false;
     QString m_coreMediaState;
     bool m_coreMediaAlive = true;

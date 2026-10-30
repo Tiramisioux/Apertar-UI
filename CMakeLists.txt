@@ -38,6 +38,7 @@ set(APERTAR_QML_FILES
     qml/ClipBrowserButton.qml
     qml/StatusChip.qml
     qml/DroppedFrameWarning.qml
+    qml/ControlsWarning.qml
     qml/SettingsPage.qml
     qml/SettingsMenuItem.qml
     qml/MonitoringRow.qml
