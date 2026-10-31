@@ -51,6 +51,7 @@ class SettingsBridge : public QObject
     Q_PROPERTY(bool dateTimeOverlayEnabled READ dateTimeOverlayEnabled WRITE setDateTimeOverlayEnabled NOTIFY dateTimeOverlayEnabledChanged)
     // Recording indicators next to REC: a red frame at the screen's edges, a red timecode.
     Q_PROPERTY(bool recordingFrameEnabled READ recordingFrameEnabled WRITE setRecordingFrameEnabled NOTIFY recordingFrameEnabledChanged)
+    Q_PROPERTY(bool frameBufferBarEnabled READ frameBufferBarEnabled WRITE setFrameBufferBarEnabled NOTIFY frameBufferBarEnabledChanged)
     Q_PROPERTY(bool recordingRedTimecodeEnabled READ recordingRedTimecodeEnabled WRITE setRecordingRedTimecodeEnabled NOTIFY recordingRedTimecodeEnabledChanged)
     Q_PROPERTY(QString timecodeMode READ timecodeMode WRITE setTimecodeMode NOTIFY timecodeModeChanged)
     Q_PROPERTY(bool photoModeEnabled READ photoModeEnabled WRITE setPhotoModeEnabled NOTIFY photoModeEnabledChanged)
@@ -197,6 +198,8 @@ public:
     void setDateTimeOverlayEnabled(bool value);
     bool recordingFrameEnabled() const;
     void setRecordingFrameEnabled(bool value);
+    bool frameBufferBarEnabled() const;
+    void setFrameBufferBarEnabled(bool value);
     bool recordingRedTimecodeEnabled() const;
     void setRecordingRedTimecodeEnabled(bool value);
 
@@ -361,6 +364,7 @@ signals:
     void externalMonitorOrientationChanged();
     void dateTimeOverlayEnabledChanged();
     void recordingFrameEnabledChanged();
+    void frameBufferBarEnabledChanged();
     void recordingRedTimecodeEnabledChanged();
     void timecodeModeChanged();
     void photoModeEnabledChanged();
@@ -472,6 +476,7 @@ private:
     QString m_externalMonitorOrientation = "Landscape";
     bool m_dateTimeOverlayEnabled = false;
     bool m_recordingFrameEnabled = false;
+    bool m_frameBufferBarEnabled = false;
     bool m_recordingRedTimecodeEnabled = true;
     QString m_timecodeMode = "Free Run";
     bool m_photoModeEnabled = false;

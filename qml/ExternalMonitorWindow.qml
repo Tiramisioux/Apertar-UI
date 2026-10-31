@@ -92,6 +92,11 @@ Window {
     readonly property string fpsValue: apertarControlBridge && apertarControlBridge.fps.length > 0
                                       ? apertarControlBridge.fps
                                       : "24.000"
+    // Shown in the FPS readout: the pre-roll's own fps while one runs (display only), else fpsValue.
+    readonly property string fpsDisplayValue: apertarControlBridge && apertarControlBridge.storagePrerollActive
+                                               && apertarControlBridge.storagePrerollFps > 0
+                                               ? Number(apertarControlBridge.storagePrerollFps).toFixed(3)
+                                               : root.fpsValue
     // The ISO in use is the ceiling the camera added (not one of the operator's values; the
     // built-in list when none is set).
     readonly property bool isoOnAddedCap: {
@@ -135,7 +140,9 @@ Window {
                                                           : root.resolutionValue
     readonly property string formatInfoValue: root.processedVideoRecordFormat
                                               ? (root.h264OutputResolutionValue + " " + root.recordingFormatValue)
-                                              : root.recordingFormatValue
+                                              : (root.recordingFormatValue
+                                                 + (!root.photoModeEnabled && root.recordingFormatValue === "cDNG"
+                                                    && !!apertarControlBridge && apertarControlBridge.cdngLogActive ? " · Log" : ""))
     readonly property real previewImageAspectRatio: root.aspectRatioForResolution(root.previewAspectResolutionValue)
     readonly property real previewDisplayAspectRatio: previewImageAspectRatio
                                                       * (settingsBridge && settingsBridge.anamorphicDesqueezeEnabled && !smpteEnabled
@@ -176,17 +183,22 @@ Window {
                                                ? monitorContentHeight
                                                : monitorContentWidth / selectedAspectRatio)
                                             : 0
-    readonly property color externalStatusFill: externalNoMedia ? "#806b5200"
+    readonly property bool externalPreroll: !!apertarControlBridge && apertarControlBridge.storagePrerollActive && !externalActiveCapture
+    readonly property color externalStatusFill: externalPreroll ? "#80124eb7"
+                                                                : externalNoMedia ? "#806b5200"
                                                                 : (externalActiveCapture ? "#80b71212" : "#70000000")
-    readonly property color externalStatusBorder: externalNoMedia ? "#66ffd54a"
+    readonly property color externalStatusBorder: externalPreroll ? "#662b7fff"
+                                                                  : externalNoMedia ? "#66ffd54a"
                                                                   : (externalActiveCapture ? "#66ff6666" : "#0affffff")
-    readonly property color externalStatusDot: externalNoMedia ? "#ffd54a"
+    readonly property color externalStatusDot: externalPreroll ? "#2b7fff"
+                                                               : externalNoMedia ? "#ffd54a"
                                                                : (externalActiveCapture ? "#fb2c36" : apertarControlBridge && apertarControlBridge.mediaWritesPending ? "#ffd54a" : "#00c951")
-    readonly property string externalStatusLabel: externalNoMedia ? "NO MEDIA"
+    readonly property string externalStatusLabel: externalPreroll ? "PRE-ROLL"
+                                                                  : externalNoMedia ? "NO MEDIA"
                                                                   : (root.timelapseActive ? "TIMELAPSE" : (root.recordingActive ? "REC" : apertarControlBridge && apertarControlBridge.mediaWritesPending ? "WRITING" : "READY"))
     readonly property var topMonitorInfoItems: [
         { label: "FORMAT", value: root.formatInfoValue },
-        { label: "FPS", value: root.fpsValue },
+        { label: "FPS", value: root.fpsDisplayValue, cameraSet: !!apertarControlBridge && apertarControlBridge.storagePrerollActive },
         { label: "ISO", value: root.isoValue, cameraSet: (!!apertarControlBridge && apertarControlBridge.isoSetByCamera) || root.isoOnAddedCap },
         { label: "SHUTTER", value: root.shutterDisplayValue, cameraSet: !!apertarControlBridge && apertarControlBridge.shutterSetByCamera },
         { label: "WB", value: root.wbValue, cameraSet: !!apertarControlBridge && apertarControlBridge.whiteBalanceSetByCamera }
@@ -1067,6 +1079,7 @@ Window {
             }
 
             Rectangle {
+                id: externalStatusPill
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: statusRow.implicitWidth + 28
                 height: 44
@@ -1085,9 +1098,44 @@ Window {
                     ColorAnimation { duration: 220 }
                 }
 
+                // Safety stop (buffer full): READY green pill, no dot or text, green bar emptying.
+                readonly property bool drainOnly: !!apertarControlBridge && apertarControlBridge.bufferSafetyStop
+                                                  && !root.externalActiveCapture
+                                                  && !!settingsBridge && settingsBridge.frameBufferBarEnabled
+                                                  && apertarControlBridge.bufferMode !== "none"
+
+                // Frame buffer bar: red fill from the left, behind the dot and text. A clipped Item of the fill's
+                // width holds a copy of the pill's own shape, so the pill's rounded ends crop the bar.
+                Item {
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.margins: externalStatusPill.border.width
+                    width: Math.max(0, (externalStatusPill.width - 2 * externalStatusPill.border.width)
+                                       * (apertarControlBridge ? apertarControlBridge.bufferFill : 0.0))
+                    clip: true
+                    visible: !!settingsBridge && settingsBridge.frameBufferBarEnabled
+                             && !!apertarControlBridge && apertarControlBridge.bufferMode !== "none"
+
+                    Behavior on width {
+                        NumberAnimation { duration: 150 }
+                    }
+
+                    Rectangle {
+                        x: 0
+                        y: 0
+                        width: externalStatusPill.width - 2 * externalStatusPill.border.width
+                        height: externalStatusPill.height - 2 * externalStatusPill.border.width
+                        radius: Math.max(0, externalStatusPill.radius - externalStatusPill.border.width)
+                        color: externalStatusPill.drainOnly ? "#00c951" : "#fb2c36"
+                        opacity: 0.85
+                    }
+                }
+
                 Row {
                     id: statusRow
                     anchors.centerIn: parent
+                    opacity: externalStatusPill.drainOnly ? 0.0 : 1.0
                     spacing: 10
 
                     Item {

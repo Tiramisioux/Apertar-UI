@@ -794,7 +794,8 @@ Item {
         "greyscale",
         "anamorphicDesqueeze",
         "recordingFrame",
-        "recordingRedTimecode"
+        "recordingRedTimecode",
+        "frameBufferBar"
     ]
     readonly property var defaultRecordOrder: [
         "stillMode",
@@ -1091,6 +1092,7 @@ Item {
             if (itemId === "greyscale") return "Greyscale"
             if (itemId === "recordingFrame") return "Recording Frame"
             if (itemId === "recordingRedTimecode") return "Red Timecode"
+            if (itemId === "frameBufferBar") return "Frame Buffer Bar"
             if (itemId === "anamorphicDesqueeze") return "Anamorphic Desqueeze"
         }
         if (section === "Record") {
@@ -2250,6 +2252,7 @@ Item {
         if (itemId === "greyscale") return monitoringGreyscaleComponent
         if (itemId === "recordingFrame") return monitoringRecordingFrameComponent
         if (itemId === "recordingRedTimecode") return monitoringRecordingRedTimecodeComponent
+        if (itemId === "frameBufferBar") return monitoringFrameBufferBarComponent
         if (itemId === "anamorphicDesqueeze") return monitoringAnamorphicComponent
         return null
     }
@@ -2908,6 +2911,24 @@ Item {
     }
 
     Component {
+        id: monitoringFrameBufferBarComponent
+
+        MonitoringRow {
+            property string reorderSectionName: "Monitoring"
+            popupParent: dropdownOverlay
+            dropdownController: sharedDropdownController
+            title: "Frame Buffer Bar"
+            description: "Shows the write buffer in the REC pill (touch screen, HDMI, WebUI)"
+            enabled: root.settingsState ? root.settingsState.frameBufferBarEnabled : false
+            onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
+            onToggleRequested: {
+                if (root.settingsState)
+                    root.settingsState.frameBufferBarEnabled = !root.settingsState.frameBufferBarEnabled
+            }
+        }
+    }
+
+    Component {
         id: monitoringRecordingRedTimecodeComponent
 
         MonitoringRow {
@@ -3338,6 +3359,86 @@ Item {
                     onValueSelected: function(v) { apertarControlBridge.applyCdngCompression(v) }
                 }
 
+            }
+
+            Column {
+                width: parent.width
+                spacing: 8
+                visible: (root.cdngRecordFormat || root.recordFormat === "MLV")
+                         && !!apertarControlBridge && apertarControlBridge.bufferSetting !== ""
+
+                Text {
+                    width: parent.width
+                    text: "Write Buffer"
+                    color: "white"
+                    font.pixelSize: 14
+                }
+
+                Row {
+                    width: parent.width
+                    spacing: 12
+
+                    ActionTile {
+                        width: (parent.width - 12) / 2
+                        label: "Frames"
+                        tone: apertarControlBridge.bufferSetting === "frames" ? "accent" : "default"
+                        actionEnabled: !apertarControlBridge.recording
+                        onClicked: apertarControlBridge.applyBufferMode("frames")
+                    }
+
+                    ActionTile {
+                        width: (parent.width - 12) / 2
+                        label: "RAM"
+                        tone: apertarControlBridge.bufferSetting === "ram" ? "accent" : "default"
+                        actionEnabled: !apertarControlBridge.recording
+                        onClicked: apertarControlBridge.applyBufferMode("ram")
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    text: apertarControlBridge.bufferSetting === "frames" ? "Original queue: 12 frames"
+                          : (apertarControlBridge.bufferMode === "ram" ? "Large RAM buffer in use"
+                             : "Takes effect at the next take"
+                               + (apertarControlBridge.bufferNote !== "" ? " \u00b7 " + apertarControlBridge.bufferNote : ""))
+                    color: "#9aa5b1"
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: 8
+                visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
+
+                Text {
+                    width: parent.width
+                    text: "Log"
+                    color: "white"
+                    font.pixelSize: 14
+                }
+
+                ActionTile {
+                    width: (parent.width - 12) / 2
+                    label: apertarControlBridge.cdngLogOn ? "On" : "Off"
+                    tone: apertarControlBridge.cdngLogOn ? "accent" : "default"
+                    actionEnabled: !apertarControlBridge.recording
+                    onClicked: apertarControlBridge.applyCdngLog(!apertarControlBridge.cdngLogOn)
+                }
+
+                Text {
+                    width: parent.width
+                    text: !apertarControlBridge.cdngLogOn ? "Linear storage"
+                          : (apertarControlBridge.cdngLogApplied
+                             ? (apertarControlBridge.cdngLogBits > 0
+                                ? "Stores one step down (" + apertarControlBridge.cdngLogBits + "-bit)"
+                                : "One step down")
+                             : "Not applied: in SDR the sensor chip already compresses the raw stream; Log works in Clear HDR. Files stay linear.")
+                    color: "#9aa5b1"
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
             }
 
             InlineDropdownField {
@@ -5416,6 +5517,78 @@ Item {
                     enabled: mediaBridge.mediaMounted && !mediaBridge.writeSpeedTestRunning
                     onClicked: mediaBridge.startWriteSpeedTest()
                 }
+            }
+
+            ActionTile {
+                width: parent.width
+                label: "Storage Pre-roll"
+                actionEnabled: mediaBridge.mediaMounted
+                               && !apertarControlBridge.storagePrerollActive
+                               && !apertarControlBridge.recording
+                onClicked: apertarControlBridge.applyStoragePreroll()
+            }
+
+            Column {
+                width: parent.width
+                spacing: 8
+                visible: !!apertarControlBridge && apertarControlBridge.storagePrerollAutoKnown
+
+                Text {
+                    width: parent.width
+                    text: "Automatic pre-roll"
+                    color: "white"
+                    font.pixelSize: 14
+                }
+
+                Row {
+                    width: parent.width
+                    spacing: 12
+
+                    ActionTile {
+                        width: (parent.width - 12) / 2
+                        label: "On"
+                        tone: apertarControlBridge.storagePrerollAuto ? "accent" : "default"
+                        onClicked: apertarControlBridge.applyStoragePrerollAuto(true)
+                    }
+
+                    ActionTile {
+                        width: (parent.width - 12) / 2
+                        label: "Off"
+                        tone: !apertarControlBridge.storagePrerollAuto ? "accent" : "default"
+                        onClicked: apertarControlBridge.applyStoragePrerollAuto(false)
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    text: "On: runs when the camera starts and when a card is inserted or formatted. Off: only the tile runs it."
+                    color: "#8cffffff"
+                    font.family: interRegular.font.family
+                    font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : (root.compactLandscapeLayout ? 11 : 13))
+                    wrapMode: Text.WordWrap
+                    renderType: Text.NativeRendering
+                }
+            }
+
+            Text {
+                width: parent.width
+                text: "Records 2 seconds at the top frame rate of the current mode and then deletes the clip, to warm up and test the card. Also runs when a card is inserted or formatted."
+                color: "#8cffffff"
+                font.family: interRegular.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : (root.compactLandscapeLayout ? 11 : 13))
+                wrapMode: Text.WordWrap
+                renderType: Text.NativeRendering
+            }
+
+            Text {
+                width: parent.width
+                visible: apertarControlBridge.storagePrerollLast.length > 0
+                text: apertarControlBridge.storagePrerollLast
+                color: "#8cffffff"
+                font.family: interRegular.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 17 : (root.standardLandscapeLayout ? 12 : (root.compactLandscapeLayout ? 10 : 11))
+                wrapMode: Text.WordWrap
+                renderType: Text.NativeRendering
             }
         }
     }

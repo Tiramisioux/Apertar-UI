@@ -615,6 +615,37 @@ bool ApertarControlBridge::applyRawBitDepth(const QString &displayValue)
     return true;
 }
 
+void ApertarControlBridge::applyStoragePreroll()
+{
+    // A refusal (running, recording, ...) comes back from Core as an error and is shown through lastError.
+    sendCoreCommand(QStringLiteral("storage_preroll"), {});
+}
+
+void ApertarControlBridge::applyStoragePrerollAuto(bool on)
+{
+    // No optimistic update: the buffer event/state from Core brings storage_preroll_auto back.
+    sendCoreCommand(QStringLiteral("set_storage_preroll"), {
+        { QStringLiteral("value"), on ? QStringLiteral("on") : QStringLiteral("off") }
+    });
+}
+
+void ApertarControlBridge::applyBufferMode(const QString &value)
+{
+    if (value != QStringLiteral("frames") && value != QStringLiteral("ram")) {
+        setLastError(QStringLiteral("Invalid write buffer mode."));
+        return;
+    }
+    if (!sendCoreCommand(QStringLiteral("set_buffer_mode"), {
+            { QStringLiteral("value"), value }
+        })) {
+        return;
+    }
+    if (m_bufferSetting != value) {
+        m_bufferSetting = value;
+        emit bufferSettingChanged();
+    }
+}
+
 bool ApertarControlBridge::applyClearHdr(bool enabled)
 {
     // Core restarts the camera, forces 4K and settles the bit depth; the settings event brings those back.
@@ -626,6 +657,19 @@ bool ApertarControlBridge::applyClearHdr(bool enabled)
 
     setClearHdrValue(enabled);
     return true;
+}
+
+void ApertarControlBridge::applyCdngLog(bool on)
+{
+    if (!sendCoreCommand(QStringLiteral("set_cdng_log"), {
+            { QStringLiteral("value"), on ? QStringLiteral("auto") : QStringLiteral("off") }
+        })) {
+        return;
+    }
+    if (m_cdngLogOn != on) {
+        m_cdngLogOn = on;
+        emit cdngLogChanged();
+    }
 }
 
 bool ApertarControlBridge::applyH264Resolution(const QString &displayValue)
@@ -1244,6 +1288,10 @@ void ApertarControlBridge::applyCoreMessage(const QJsonObject &message)
         setAudioInputLevel(message.value(QStringLiteral("input_level")).toInt(0));
         return;
     }
+    if (event == QStringLiteral("buffer")) {
+        applyBufferState(message);
+        return;
+    }
 
     if (event == QStringLiteral("recording")) {
         applyCoreState(message);
@@ -1625,6 +1673,8 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
 
     if (state.contains(QStringLiteral("recording")))
         setRecordingState(state.value(QStringLiteral("recording")).toBool(false));
+    applyBufferState(state);
+    applyCdngLogState(state);
 
     if (state.contains(QStringLiteral("photo_write_error"))) {
         const QString error = state.value(QStringLiteral("photo_write_error")).toString();
@@ -2540,6 +2590,145 @@ void ApertarControlBridge::setAutofocusWindowValue(const QString &value)
 
     m_autofocusWindow = value;
     emit autofocusWindowChanged();
+}
+
+void ApertarControlBridge::applyBufferState(const QJsonObject &state)
+{
+    // Core's flat JSON delivers scalars as strings (KB trap 7); accept numbers too.
+    if (state.contains(QStringLiteral("buffer_mode"))) {
+        const QString mode = state.value(QStringLiteral("buffer_mode")).toString();
+        const QString normalized = (mode == QStringLiteral("frames") || mode == QStringLiteral("ram"))
+            ? mode : QStringLiteral("none");
+        if (m_bufferMode != normalized) {
+            m_bufferMode = normalized;
+            emit bufferModeChanged();
+        }
+    }
+    if (state.contains(QStringLiteral("buffer_setting"))) {
+        const QString setting = state.value(QStringLiteral("buffer_setting")).toString();
+        const QString normalized = (setting == QStringLiteral("frames") || setting == QStringLiteral("ram"))
+            ? setting : QString();
+        if (m_bufferSetting != normalized) {
+            m_bufferSetting = normalized;
+            emit bufferSettingChanged();
+        }
+    }
+    if (state.contains(QStringLiteral("buffer_note"))) {
+        const QString note = state.value(QStringLiteral("buffer_note")).toString();
+        if (m_bufferNote != note) {
+            m_bufferNote = note;
+            emit bufferNoteChanged();
+        }
+    }
+    if (state.contains(QStringLiteral("buffer_fill"))) {
+        const QJsonValue raw = state.value(QStringLiteral("buffer_fill"));
+        const double parsed = raw.isString() ? raw.toString().toDouble() : raw.toDouble(0.0);
+        const double fill = qBound(0.0, parsed, 1.0);
+        if (!qFuzzyCompare(m_bufferFill + 1.0, fill + 1.0)) {
+            m_bufferFill = fill;
+            emit bufferFillChanged();
+        }
+    }
+    if (state.contains(QStringLiteral("buffer_stop_percent"))) {
+        const QJsonValue raw = state.value(QStringLiteral("buffer_stop_percent"));
+        const int percent = qMax(0, qRound(raw.isString() ? raw.toString().toDouble() : raw.toDouble(0.0)));
+        if (m_bufferStopPercent != percent) {
+            m_bufferStopPercent = percent;
+            emit bufferStopPercentChanged();
+        }
+    }
+    if (state.contains(QStringLiteral("buffer_safety_stop"))) {
+        const QJsonValue raw = state.value(QStringLiteral("buffer_safety_stop"));
+        const bool stopped = raw.isString()
+            ? (raw.toString().trimmed().toLower() == QStringLiteral("true") || raw.toString().trimmed() == QStringLiteral("1"))
+            : raw.toBool(false);
+        if (m_bufferSafetyStop != stopped) {
+            m_bufferSafetyStop = stopped;
+            emit bufferSafetyStopChanged();
+            if (stopped) {
+                // One-time operator message; shown even when the buffer bar option is off.
+                const QString message = m_bufferStopPercent > 0
+                    ? QStringLiteral("The write buffer reached %1 %.").arg(m_bufferStopPercent)
+                    : QStringLiteral("The write buffer reached its limit.");
+                emit bufferSafetyStopped(message);
+            }
+        }
+    }
+    if (state.contains(QStringLiteral("storage_preroll_active"))) {
+        const QJsonValue raw = state.value(QStringLiteral("storage_preroll_active"));
+        const bool active = raw.isString()
+            ? (raw.toString().trimmed().toLower() == QStringLiteral("true") || raw.toString().trimmed() == QStringLiteral("1"))
+            : raw.toBool(false);
+        if (m_storagePrerollActive != active) {
+            m_storagePrerollActive = active;
+            emit storagePrerollActiveChanged();
+        }
+    }
+    if (state.contains(QStringLiteral("storage_preroll_auto"))) {
+        const QJsonValue raw = state.value(QStringLiteral("storage_preroll_auto"));
+        const QString text = raw.toString().trimmed().toLower();
+        const bool autoOn = raw.isString()
+            ? (text == QStringLiteral("true") || text == QStringLiteral("1") || text == QStringLiteral("on"))
+            : raw.toBool(false);
+        if (m_storagePrerollAuto != autoOn) {
+            m_storagePrerollAuto = autoOn;
+            emit storagePrerollAutoChanged();
+        }
+        if (!m_storagePrerollAutoKnown) {
+            m_storagePrerollAutoKnown = true;
+            emit storagePrerollAutoKnownChanged();
+        }
+    }
+    if (state.contains(QStringLiteral("storage_preroll_fps"))) {
+        const QJsonValue raw = state.value(QStringLiteral("storage_preroll_fps"));
+        const double parsed = raw.isString() ? raw.toString().trimmed().toDouble() : raw.toDouble(0.0);
+        const double prerollFps = parsed > 0.0 ? parsed : 0.0;
+        if (!qFuzzyCompare(m_storagePrerollFps + 1.0, prerollFps + 1.0)) {
+            m_storagePrerollFps = prerollFps;
+            emit storagePrerollFpsChanged();
+        }
+    }
+    if (state.contains(QStringLiteral("storage_preroll_last"))) {
+        const QString last = state.value(QStringLiteral("storage_preroll_last")).toString();
+        if (m_storagePrerollLast != last) {
+            m_storagePrerollLast = last;
+            emit storagePrerollLastChanged();
+        }
+    }
+}
+
+void ApertarControlBridge::applyCdngLogState(const QJsonObject &state)
+{
+    // Flat JSON scalars may arrive as strings or numbers/bools; accept both.
+    const auto asBool = [](const QJsonValue &raw) {
+        if (raw.isString()) {
+            const QString text = raw.toString().trimmed().toLower();
+            return text == QStringLiteral("true") || text == QStringLiteral("1");
+        }
+        return raw.isBool() ? raw.toBool(false) : raw.toDouble(0.0) != 0.0;
+    };
+    int bits = m_cdngLogBits;
+    if (state.contains(QStringLiteral("cdng_log_bits"))) {
+        const QJsonValue raw = state.value(QStringLiteral("cdng_log_bits"));
+        bits = qMax(0, raw.isString() ? raw.toString().toInt() : raw.toInt(0));
+    }
+    const bool wasAvailable = m_cdngLogAvailable;
+    const bool wasApplied = m_cdngLogApplied;
+    if (state.contains(QStringLiteral("cdng_log_available")))
+        m_cdngLogAvailable = asBool(state.value(QStringLiteral("cdng_log_available")));
+    if (state.contains(QStringLiteral("cdng_log_applied")))
+        m_cdngLogApplied = asBool(state.value(QStringLiteral("cdng_log_applied")));
+    bool on = m_cdngLogOn;
+    if (state.contains(QStringLiteral("cdng_log")))
+        on = state.value(QStringLiteral("cdng_log")).toVariant().toString().trimmed().toLower() != QStringLiteral("off");
+    const bool active = m_cdngLogAvailable && bits > 0 && m_cdngLogApplied;
+    if (m_cdngLogActive != active || m_cdngLogBits != bits || m_cdngLogOn != on
+        || m_cdngLogAvailable != wasAvailable || m_cdngLogApplied != wasApplied) {
+        m_cdngLogActive = active;
+        m_cdngLogBits = bits;
+        m_cdngLogOn = on;
+        emit cdngLogChanged();
+    }
 }
 
 void ApertarControlBridge::setRecordingState(bool value)

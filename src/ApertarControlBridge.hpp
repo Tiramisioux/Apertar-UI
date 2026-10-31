@@ -58,6 +58,22 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(QString autofocusWindow READ autofocusWindow NOTIFY autofocusWindowChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
     Q_PROPERTY(bool recordingHasDroppedFrames READ recordingHasDroppedFrames NOTIFY recordingHealthChanged)
+    Q_PROPERTY(double bufferFill READ bufferFill NOTIFY bufferFillChanged)
+    Q_PROPERTY(QString bufferMode READ bufferMode NOTIFY bufferModeChanged)
+    Q_PROPERTY(bool bufferSafetyStop READ bufferSafetyStop NOTIFY bufferSafetyStopChanged)
+    Q_PROPERTY(bool storagePrerollActive READ storagePrerollActive NOTIFY storagePrerollActiveChanged)
+    Q_PROPERTY(bool storagePrerollAuto READ storagePrerollAuto NOTIFY storagePrerollAutoChanged)
+    Q_PROPERTY(bool storagePrerollAutoKnown READ storagePrerollAutoKnown NOTIFY storagePrerollAutoKnownChanged)
+    Q_PROPERTY(double storagePrerollFps READ storagePrerollFps NOTIFY storagePrerollFpsChanged)
+    Q_PROPERTY(QString storagePrerollLast READ storagePrerollLast NOTIFY storagePrerollLastChanged)
+    Q_PROPERTY(int bufferStopPercent READ bufferStopPercent NOTIFY bufferStopPercentChanged)
+    Q_PROPERTY(QString bufferSetting READ bufferSetting NOTIFY bufferSettingChanged)
+    Q_PROPERTY(QString bufferNote READ bufferNote NOTIFY bufferNoteChanged)
+    Q_PROPERTY(bool cdngLogActive READ cdngLogActive NOTIFY cdngLogChanged)
+    Q_PROPERTY(int cdngLogBits READ cdngLogBits NOTIFY cdngLogChanged)
+    Q_PROPERTY(bool cdngLogOn READ cdngLogOn NOTIFY cdngLogChanged)
+    Q_PROPERTY(bool cdngLogAvailable READ cdngLogAvailable NOTIFY cdngLogChanged)
+    Q_PROPERTY(bool cdngLogApplied READ cdngLogApplied NOTIFY cdngLogChanged)
     // T45: what Core's validator finds in ~/apertar-hardware.conf (get_state, and the "controls" event after a save).
     Q_PROPERTY(int controlsErrors READ controlsErrors NOTIFY controlsStatusChanged)
     Q_PROPERTY(int controlsWarnings READ controlsWarnings NOTIFY controlsStatusChanged)
@@ -118,6 +134,22 @@ public:
     QString autofocusWindow() const;
     bool recording() const;
     bool recordingHasDroppedFrames() const { return m_recordingHasDroppedFrames; }
+    double bufferFill() const { return m_bufferFill; }
+    QString bufferMode() const { return m_bufferMode; }
+    bool bufferSafetyStop() const { return m_bufferSafetyStop; }
+    bool storagePrerollActive() const { return m_storagePrerollActive; }
+    bool storagePrerollAuto() const { return m_storagePrerollAuto; }
+    bool storagePrerollAutoKnown() const { return m_storagePrerollAutoKnown; }
+    double storagePrerollFps() const { return m_storagePrerollFps; }
+    QString storagePrerollLast() const { return m_storagePrerollLast; }
+    int bufferStopPercent() const { return m_bufferStopPercent; }
+    QString bufferSetting() const { return m_bufferSetting; }
+    QString bufferNote() const { return m_bufferNote; }
+    bool cdngLogActive() const { return m_cdngLogActive; }
+    int cdngLogBits() const { return m_cdngLogBits; }
+    bool cdngLogOn() const { return m_cdngLogOn; }
+    bool cdngLogAvailable() const { return m_cdngLogAvailable; }
+    bool cdngLogApplied() const { return m_cdngLogApplied; }
     int controlsErrors() const { return m_controlsErrors; }
     int controlsWarnings() const { return m_controlsWarnings; }
     bool standby() const { return m_standby; }
@@ -149,7 +181,11 @@ public:
     Q_INVOKABLE bool applyCdngCompression(const QString &value);
     Q_INVOKABLE bool applyTuningFile(const QString &path);
     Q_INVOKABLE bool applyRawBitDepth(const QString &displayValue);
+    Q_INVOKABLE void applyBufferMode(const QString &value);
+    Q_INVOKABLE void applyStoragePreroll();
+    Q_INVOKABLE void applyStoragePrerollAuto(bool on);
     Q_INVOKABLE bool applyClearHdr(bool enabled);
+    Q_INVOKABLE void applyCdngLog(bool on);
     Q_INVOKABLE bool applyH264Resolution(const QString &displayValue);
     // target: "ui" (what the screens show), "files" (the clips and the audio) or "both"
     Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue, const QString &target);
@@ -200,6 +236,18 @@ signals:
     void autofocusWindowChanged();
     void recordingChanged();
     void recordingHealthChanged();
+    void bufferFillChanged();
+    void bufferModeChanged();
+    void bufferSafetyStopChanged();
+    void storagePrerollActiveChanged();
+    void storagePrerollAutoChanged();
+    void storagePrerollAutoKnownChanged();
+    void storagePrerollFpsChanged();
+    void storagePrerollLastChanged();
+    void bufferStopPercentChanged();
+    void bufferSettingChanged();
+    void bufferNoteChanged();
+    void cdngLogChanged();
     void controlsStatusChanged();
     void standbyChanged();
     // Core's media watcher state, from the "media" event and get_state.
@@ -212,6 +260,7 @@ signals:
     void connectedChanged();
     void lastErrorChanged();
     void recordingFailed(const QString &error);
+    void bufferSafetyStopped(const QString &message);
     void gyroCalibrationFinished(bool ok, const QString &message);
     void sharedPhotoStateChanged(bool photoModeEnabled,
                                  const QString &photoFormat,
@@ -296,6 +345,8 @@ private:
     void setAutofocusSpeedValue(const QString &value);
     void setAutofocusWindowValue(const QString &value);
     void setRecordingState(bool value);
+    void applyBufferState(const QJsonObject &state);
+    void applyCdngLogState(const QJsonObject &state);
     void setTimelapseActiveState(bool value);
     void setTimelapseShotCount(qulonglong value);
     void setAudioInputLevel(int value);
@@ -343,6 +394,23 @@ private:
     QString m_exposureMetering = QStringLiteral("centre-weighted");
     QVariantList m_exposureMeteringOptions;
     bool m_recording = false;
+    double m_bufferFill = 0.0; // write-queue level 0..1 from Core ("buffer" event, buffer_fill)
+    QString m_bufferMode = QStringLiteral("none"); // "frames", "ram" or "none"
+    bool m_storagePrerollActive = false; // Core's storage_preroll_active: from the start of a pre-roll until its clip is deleted
+    bool m_storagePrerollAuto = true; // Core's storage_preroll_auto: the automatic pre-roll (Core start, card insert/format); only meaningful once m_storagePrerollAutoKnown
+    bool m_storagePrerollAutoKnown = false; // false until Core has sent storage_preroll_auto (older Core never does)
+    double m_storagePrerollFps = 0.0; // Core's storage_preroll_fps: the pre-roll's own fps while one runs, 0 otherwise; display only, never the operator's fps
+    QString m_storagePrerollLast; // Core's storage_preroll_last: "ok: ...", "skipped: ...", "failed: ..."; empty = none yet
+    bool m_bufferSafetyStop = false; // Core ended the take because the write buffer filled; true until drained
+    int m_bufferStopPercent = 0;     // Core's buffer stop threshold in percent, 0 = off
+    QString m_bufferSetting; // requested mode from Core's buffer_setting; empty = unknown (control hidden)
+    QString m_bufferNote; // Core's buffer_note: why ram was or was not used
+    // CineMate Log (Core: cdng_log_bits, cdng_log_available, cdng_log_applied); active = available && bits > 0 && applied.
+    int m_cdngLogBits = 0;
+    bool m_cdngLogAvailable = false;
+    bool m_cdngLogApplied = true; // a missing cdng_log_applied (older Core) counts as applied
+    bool m_cdngLogActive = false;
+    bool m_cdngLogOn = false;
     bool m_fpsSpeedRamp = false; // Core's fps_speed_ramp (T31): FPS may change during a raw take
     bool m_soundRecording = false; // a sound-only take: recording, but not the camera
     bool m_fpsSpeedRampKeepExposure = false;

@@ -366,6 +366,7 @@ SettingsBridge::SettingsBridge(QObject *parent)
         m_settings.value("externalMonitorOrientation", "Landscape").toString());
     m_dateTimeOverlayEnabled = m_settings.value("dateTimeOverlayEnabled", false).toBool();
     m_recordingFrameEnabled = m_settings.value("recordingFrameEnabled", false).toBool();
+    m_frameBufferBarEnabled = m_settings.value("frameBufferBarEnabled", false).toBool();
     m_recordingRedTimecodeEnabled = m_settings.value("recordingRedTimecodeEnabled", true).toBool();
     m_timecodeMode = m_settings.value("timecodeMode", "Free Run").toString();
     m_photoModeEnabled = m_settings.value("photoModeEnabled", false).toBool();
@@ -548,6 +549,7 @@ void SettingsBridge::pollExternalSettings()
     setExternalMonitorOrientation(m_settings.value(QStringLiteral("externalMonitorOrientation"), m_externalMonitorOrientation).toString());
     setDateTimeOverlayEnabled(m_settings.value(QStringLiteral("dateTimeOverlayEnabled"), m_dateTimeOverlayEnabled).toBool());
     setRecordingFrameEnabled(m_settings.value(QStringLiteral("recordingFrameEnabled"), m_recordingFrameEnabled).toBool());
+    setFrameBufferBarEnabled(m_settings.value(QStringLiteral("frameBufferBarEnabled"), m_frameBufferBarEnabled).toBool());
     setRecordingRedTimecodeEnabled(m_settings.value(QStringLiteral("recordingRedTimecodeEnabled"), m_recordingRedTimecodeEnabled).toBool());
     setPhotoModeEnabled(m_settings.value(QStringLiteral("photoModeEnabled"), m_photoModeEnabled).toBool());
     setPhotoLongExposureEnabled(m_settings.value(QStringLiteral("photoLongExposureEnabled"), m_photoLongExposureEnabled).toBool());
@@ -1158,6 +1160,23 @@ void SettingsBridge::setRecordingFrameEnabled(bool value)
     m_settings.sync();
     updateSettingsFileState();
     emit recordingFrameEnabledChanged();
+}
+
+bool SettingsBridge::frameBufferBarEnabled() const
+{
+    return m_frameBufferBarEnabled;
+}
+
+void SettingsBridge::setFrameBufferBarEnabled(bool value)
+{
+    if (m_frameBufferBarEnabled == value)
+        return;
+
+    m_frameBufferBarEnabled = value;
+    if (!m_externalSettingsSyncing) m_settings.setValue("frameBufferBarEnabled", value);
+    m_settings.sync();
+    updateSettingsFileState();
+    emit frameBufferBarEnabledChanged();
 }
 
 bool SettingsBridge::recordingRedTimecodeEnabled() const
@@ -2130,6 +2149,7 @@ QJsonObject SettingsBridge::serializeCurrentSettings() const
     settingsObject.insert(QStringLiteral("externalMonitorOrientation"), m_externalMonitorOrientation);
     settingsObject.insert(QStringLiteral("dateTimeOverlayEnabled"), m_dateTimeOverlayEnabled);
     settingsObject.insert(QStringLiteral("recordingFrameEnabled"), m_recordingFrameEnabled);
+    settingsObject.insert(QStringLiteral("frameBufferBarEnabled"), m_frameBufferBarEnabled);
     settingsObject.insert(QStringLiteral("recordingRedTimecodeEnabled"), m_recordingRedTimecodeEnabled);
     settingsObject.insert(QStringLiteral("timecodeMode"), m_timecodeMode);
     settingsObject.insert(QStringLiteral("photoModeEnabled"), m_photoModeEnabled);
@@ -2220,6 +2240,7 @@ bool SettingsBridge::applySettingsObject(const QJsonObject &settingsObject, QStr
     setExternalMonitorOrientation(stringValue(settingsObject, "externalMonitorOrientation", m_externalMonitorOrientation));
     setDateTimeOverlayEnabled(boolValue(settingsObject, "dateTimeOverlayEnabled", m_dateTimeOverlayEnabled));
     setRecordingFrameEnabled(boolValue(settingsObject, "recordingFrameEnabled", m_recordingFrameEnabled));
+    setFrameBufferBarEnabled(boolValue(settingsObject, "frameBufferBarEnabled", m_frameBufferBarEnabled));
     setRecordingRedTimecodeEnabled(boolValue(settingsObject, "recordingRedTimecodeEnabled", m_recordingRedTimecodeEnabled));
     setTimecodeMode(stringValue(settingsObject, "timecodeMode", m_timecodeMode));
     setPhotoModeEnabled(boolValue(settingsObject, "photoModeEnabled", m_photoModeEnabled));

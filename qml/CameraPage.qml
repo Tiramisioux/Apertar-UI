@@ -552,9 +552,10 @@ Item {
                                                  : root.resolution + root.rawResolutionDetail
     readonly property string formatDisplaySubtext: root.photoModeEnabled ? root.photoFormatSetting : root.recordingFormat.indexOf("ProRes") === 0 ? root.recordingFormat : root.h264RecordFormat ? "H.264"
                                                    : (root.recordingFormat === "MLV" ? "MLV RAW"
-                                                         : (root.cdngCompressionValue === "lossless_jpeg" ? "Lossless"
+                                                         : ((root.cdngCompressionValue === "lossless_jpeg" ? "Lossless"
                                                             : (root.cdngCompressionValue === "lossy_3to1" ? "Lossy 3:1"
-                                                               : (root.cdngCompressionValue === "lossy_5to1" ? "Lossy 5:1" : "Uncompressed"))))
+                                                               : (root.cdngCompressionValue === "lossy_5to1" ? "Lossy 5:1" : "Uncompressed")))
+                                                            + (root.controlBridge && root.controlBridge.cdngLogActive ? " · Log" : "")))
 	
 	//Zoom Property
 	property real previewZoom: 1.0
@@ -905,9 +906,9 @@ function fpsCeiling() {
         var normalizedResolution = root.normalizedResolutionForCurrentSensor(root.resolution)
         max = Math.min(max, root.imx477MaximumUncompressedFpsForResolution(normalizedResolution))
     }
-    if (root.losslessImx585Mode)
-        max = Math.min(max, 30.0)
-    else if (root.losslessFourKMode)
+    if (root.losslessImx585Mode) {
+        // Core's fps_max carries the IMX585 lossless ceiling (the mode's own maximum); no fixed cap here
+    } else if (root.losslessFourKMode)
         max = Math.min(max, root.isApproximatelyFourThree(root.resolution) ? 24.0 : 30.0)
     else if (root.losslessTwoKMode)
         max = Math.min(max, 60.0)
@@ -1005,6 +1006,10 @@ function estimatedFrameSizeMB() {
     var normalized = root.normalizedResolutionForCurrentSensor(root.resolution)
     var size = root.parsedResolutionSize(normalized)
     var bits = root.currentRawBitDepthNumber()
+    // Log stores fewer bits per sample, but only where Core really applies it (cdngLogActive)
+    if (!root.photoModeEnabled && root.recordingFormat === "cDNG" && root.controlBridge
+            && root.controlBridge.cdngLogActive && root.controlBridge.cdngLogBits > 0)
+        bits = root.controlBridge.cdngLogBits
     var rawMiB = root.rawFrameSizeMiB(size.width, size.height, bits)
 
     if (root.photoModeEnabled)
@@ -1949,6 +1954,15 @@ Connections {
                                "Recording Error", error)
     }
 
+    function onCdngLogChanged() {
+        root.updateMediaEstimate()   // minutes left follow the bits Log stores
+    }
+
+    function onBufferSafetyStopped(message) {
+        root.showRecordWarning("Recording Stopped", "The write buffer was nearly full. The clip is complete.",
+                               "Write Buffer", message)
+    }
+
     function onPhotoCaptureFailed(error) {
         root.cancelPhotoSequence()
         root.showRecordWarning("Still Not Saved", "The still image could not be saved completely.",
@@ -2684,6 +2698,11 @@ Timer {
         oversizedCompact: root.largeLandscapeLayout
         darkBackground: root.compactDarkControls
         useControlBackground: root.compactLandscapeLayout
+        bufferFill: root.controlBridge ? root.controlBridge.bufferFill : 0.0
+        bufferBarVisible: !!root.settingsState && root.settingsState.frameBufferBarEnabled
+                          && !!root.controlBridge && root.controlBridge.bufferMode !== "none"
+        bufferDrain: !!root.controlBridge && root.controlBridge.bufferSafetyStop
+        storagePreroll: !!root.controlBridge && root.controlBridge.storagePrerollActive
         }
 
         ControlsWarning {
@@ -3029,6 +3048,10 @@ Text {
                 popupRadius: root.topDropdownPopupRadius
                 popupTopMargin: root.topDropdownPopupTopMargin
                 value: root.fps
+                // Pre-roll fps shown for display only; value (the picker selection) stays the operator's fps.
+                displayValue: !!root.controlBridge && root.controlBridge.storagePrerollActive && root.controlBridge.storagePrerollFps > 0
+                              ? root.formatFpsValue(root.controlBridge.storagePrerollFps) : ""
+                valueItalic: !!root.controlBridge && root.controlBridge.storagePrerollActive // Core's pre-roll fps, not the operator's
                 isOpen: root.openDropdown === "fps"
                 options: root.fpsPickerOptions
                 onToggleRequested: {
