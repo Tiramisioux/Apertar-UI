@@ -192,10 +192,10 @@ Window {
                                                                   : (externalActiveCapture ? "#66ff6666" : "#0affffff")
     readonly property color externalStatusDot: externalPreroll ? "#2b7fff"
                                                                : externalNoMedia ? "#ffd54a"
-                                                               : (externalActiveCapture ? "#fb2c36" : apertarControlBridge && apertarControlBridge.mediaWritesPending ? "#ffd54a" : "#00c951")
+                                                               : (externalActiveCapture ? "#fb2c36" : apertarControlBridge && apertarControlBridge.mediaWritesPending && !apertarControlBridge.bufferSafetyStop ? "#ffd54a" : "#00c951")
     readonly property string externalStatusLabel: externalPreroll ? "PRE-ROLL"
                                                                   : externalNoMedia ? "NO MEDIA"
-                                                                  : (root.timelapseActive ? "TIMELAPSE" : (root.recordingActive ? "REC" : apertarControlBridge && apertarControlBridge.mediaWritesPending ? "WRITING" : "READY"))
+                                                                  : (root.timelapseActive ? "TIMELAPSE" : (root.recordingActive ? "REC" : apertarControlBridge && apertarControlBridge.mediaWritesPending && !apertarControlBridge.bufferSafetyStop ? "WRITING" : "READY"))
     readonly property var topMonitorInfoItems: [
         { label: "FORMAT", value: root.formatInfoValue },
         { label: "FPS", value: root.fpsDisplayValue, cameraSet: !!apertarControlBridge && apertarControlBridge.storagePrerollActive },

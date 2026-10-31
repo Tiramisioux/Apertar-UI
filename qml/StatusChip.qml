@@ -53,14 +53,15 @@ Rectangle {
     readonly property color chipFill: compact && useControlBackground ? controlFill : stateFill
     readonly property color chipBorder: compact && useControlBackground ? controlBorder : stateBorder
     readonly property bool drainOnly: bufferDrain && bufferBarVisible && !recording
+    readonly property bool draining: bufferDrain && !activeCapture   // a safety stop is not a take: READY green while the buffer empties
     readonly property color dotFill: prerollOnly ? "#2b7fff"
                                               : noMedia ? "#ffd54a"
-                                              : (activeCapture ? "#fb2c36" : writing ? "#ffd54a" : "#00c951")
+                                              : (activeCapture ? "#fb2c36" : (writing && !draining) ? "#ffd54a" : "#00c951")
     readonly property string chipLabel: prerollOnly ? "PRE-ROLL"
                                                 : noMedia ? "NO MEDIA"
-                                                : (timelapse ? "TIMELAPSE" : (recording ? "REC" : writing ? "WRITING" : "READY"))
+                                                : (timelapse ? "TIMELAPSE" : (recording ? "REC" : (writing && !draining) ? "WRITING" : "READY"))
 
-    width: Math.round((prerollOnly ? 118 : noMedia ? 118 : (timelapse ? 136 : writing && !recording ? 118 : 90)) * chipScale)
+    width: Math.round((prerollOnly ? 118 : noMedia ? 118 : (timelapse ? 136 : writing && !recording && !draining ? 118 : 90)) * chipScale)
     height: Math.round(30 * chipScale)
     radius: height / 2
     color: chipFill
