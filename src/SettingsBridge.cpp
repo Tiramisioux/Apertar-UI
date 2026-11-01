@@ -368,6 +368,7 @@ SettingsBridge::SettingsBridge(QObject *parent)
     m_recordingFrameEnabled = m_settings.value("recordingFrameEnabled", false).toBool();
     m_frameBufferBarEnabled = m_settings.value("frameBufferBarEnabled", false).toBool();
     m_recordingRedTimecodeEnabled = m_settings.value("recordingRedTimecodeEnabled", true).toBool();
+    m_audioRecordedOutlineEnabled = m_settings.value("audioRecordedOutlineEnabled", true).toBool();
     m_timecodeMode = m_settings.value("timecodeMode", "Free Run").toString();
     m_photoModeEnabled = m_settings.value("photoModeEnabled", false).toBool();
     m_photoLongExposureEnabled = m_settings.value("photoLongExposureEnabled", false).toBool();
@@ -551,6 +552,7 @@ void SettingsBridge::pollExternalSettings()
     setRecordingFrameEnabled(m_settings.value(QStringLiteral("recordingFrameEnabled"), m_recordingFrameEnabled).toBool());
     setFrameBufferBarEnabled(m_settings.value(QStringLiteral("frameBufferBarEnabled"), m_frameBufferBarEnabled).toBool());
     setRecordingRedTimecodeEnabled(m_settings.value(QStringLiteral("recordingRedTimecodeEnabled"), m_recordingRedTimecodeEnabled).toBool());
+    setAudioRecordedOutlineEnabled(m_settings.value(QStringLiteral("audioRecordedOutlineEnabled"), m_audioRecordedOutlineEnabled).toBool());
     setPhotoModeEnabled(m_settings.value(QStringLiteral("photoModeEnabled"), m_photoModeEnabled).toBool());
     setPhotoLongExposureEnabled(m_settings.value(QStringLiteral("photoLongExposureEnabled"), m_photoLongExposureEnabled).toBool());
     setPhotoBracketingEnabled(m_settings.value(QStringLiteral("photoBracketingEnabled"), m_photoBracketingEnabled).toBool());
@@ -1194,6 +1196,23 @@ void SettingsBridge::setRecordingRedTimecodeEnabled(bool value)
     m_settings.sync();
     updateSettingsFileState();
     emit recordingRedTimecodeEnabledChanged();
+}
+
+bool SettingsBridge::audioRecordedOutlineEnabled() const
+{
+    return m_audioRecordedOutlineEnabled;
+}
+
+void SettingsBridge::setAudioRecordedOutlineEnabled(bool value)
+{
+    if (m_audioRecordedOutlineEnabled == value)
+        return;
+
+    m_audioRecordedOutlineEnabled = value;
+    if (!m_externalSettingsSyncing) m_settings.setValue("audioRecordedOutlineEnabled", value);
+    m_settings.sync();
+    updateSettingsFileState();
+    emit audioRecordedOutlineEnabledChanged();
 }
 
 QString SettingsBridge::timecodeMode() const
@@ -2151,6 +2170,7 @@ QJsonObject SettingsBridge::serializeCurrentSettings() const
     settingsObject.insert(QStringLiteral("recordingFrameEnabled"), m_recordingFrameEnabled);
     settingsObject.insert(QStringLiteral("frameBufferBarEnabled"), m_frameBufferBarEnabled);
     settingsObject.insert(QStringLiteral("recordingRedTimecodeEnabled"), m_recordingRedTimecodeEnabled);
+    settingsObject.insert(QStringLiteral("audioRecordedOutlineEnabled"), m_audioRecordedOutlineEnabled);
     settingsObject.insert(QStringLiteral("timecodeMode"), m_timecodeMode);
     settingsObject.insert(QStringLiteral("photoModeEnabled"), m_photoModeEnabled);
     settingsObject.insert(QStringLiteral("photoLongExposureEnabled"), m_photoLongExposureEnabled);
@@ -2242,6 +2262,7 @@ bool SettingsBridge::applySettingsObject(const QJsonObject &settingsObject, QStr
     setRecordingFrameEnabled(boolValue(settingsObject, "recordingFrameEnabled", m_recordingFrameEnabled));
     setFrameBufferBarEnabled(boolValue(settingsObject, "frameBufferBarEnabled", m_frameBufferBarEnabled));
     setRecordingRedTimecodeEnabled(boolValue(settingsObject, "recordingRedTimecodeEnabled", m_recordingRedTimecodeEnabled));
+    setAudioRecordedOutlineEnabled(boolValue(settingsObject, "audioRecordedOutlineEnabled", m_audioRecordedOutlineEnabled));
     setTimecodeMode(stringValue(settingsObject, "timecodeMode", m_timecodeMode));
     setPhotoModeEnabled(boolValue(settingsObject, "photoModeEnabled", m_photoModeEnabled));
     setPhotoLongExposureEnabled(boolValue(settingsObject, "photoLongExposureEnabled", m_photoLongExposureEnabled));

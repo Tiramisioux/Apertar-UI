@@ -797,6 +797,7 @@ Item {
         "anamorphicDesqueeze",
         "recordingFrame",
         "recordingRedTimecode",
+        "audioRecordedOutline",
         "frameBufferBar"
     ]
     readonly property var defaultRecordOrder: [
@@ -1095,6 +1096,7 @@ Item {
             if (itemId === "greyscale") return "Greyscale"
             if (itemId === "recordingFrame") return "Recording Frame"
             if (itemId === "recordingRedTimecode") return "Red Timecode"
+            if (itemId === "audioRecordedOutline") return "Audio Recording Outline"
             if (itemId === "frameBufferBar") return "Frame Buffer Bar"
             if (itemId === "anamorphicDesqueeze") return "Anamorphic Desqueeze"
         }
@@ -2283,6 +2285,7 @@ Item {
         if (itemId === "greyscale") return monitoringGreyscaleComponent
         if (itemId === "recordingFrame") return monitoringRecordingFrameComponent
         if (itemId === "recordingRedTimecode") return monitoringRecordingRedTimecodeComponent
+        if (itemId === "audioRecordedOutline") return monitoringAudioRecordedOutlineComponent
         if (itemId === "frameBufferBar") return monitoringFrameBufferBarComponent
         if (itemId === "anamorphicDesqueeze") return monitoringAnamorphicComponent
         return null
@@ -2974,6 +2977,24 @@ Item {
             onToggleRequested: {
                 if (root.settingsState)
                     root.settingsState.recordingRedTimecodeEnabled = !root.settingsState.recordingRedTimecodeEnabled
+            }
+        }
+    }
+
+    Component {
+        id: monitoringAudioRecordedOutlineComponent
+
+        MonitoringRow {
+            property string reorderSectionName: "Monitoring"
+            popupParent: dropdownOverlay
+            dropdownController: sharedDropdownController
+            title: "Audio Recording Outline"
+            description: "A faint red outline on the audio meter when sound is recorded with the clips."
+            enabled: root.settingsState ? root.settingsState.audioRecordedOutlineEnabled : true
+            onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
+            onToggleRequested: {
+                if (root.settingsState)
+                    root.settingsState.audioRecordedOutlineEnabled = !root.settingsState.audioRecordedOutlineEnabled
             }
         }
     }

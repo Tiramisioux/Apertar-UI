@@ -53,6 +53,7 @@ class SettingsBridge : public QObject
     Q_PROPERTY(bool recordingFrameEnabled READ recordingFrameEnabled WRITE setRecordingFrameEnabled NOTIFY recordingFrameEnabledChanged)
     Q_PROPERTY(bool frameBufferBarEnabled READ frameBufferBarEnabled WRITE setFrameBufferBarEnabled NOTIFY frameBufferBarEnabledChanged)
     Q_PROPERTY(bool recordingRedTimecodeEnabled READ recordingRedTimecodeEnabled WRITE setRecordingRedTimecodeEnabled NOTIFY recordingRedTimecodeEnabledChanged)
+    Q_PROPERTY(bool audioRecordedOutlineEnabled READ audioRecordedOutlineEnabled WRITE setAudioRecordedOutlineEnabled NOTIFY audioRecordedOutlineEnabledChanged)
     Q_PROPERTY(QString timecodeMode READ timecodeMode WRITE setTimecodeMode NOTIFY timecodeModeChanged)
     Q_PROPERTY(bool photoModeEnabled READ photoModeEnabled WRITE setPhotoModeEnabled NOTIFY photoModeEnabledChanged)
     Q_PROPERTY(bool photoLongExposureEnabled READ photoLongExposureEnabled WRITE setPhotoLongExposureEnabled NOTIFY photoLongExposureEnabledChanged)
@@ -202,6 +203,8 @@ public:
     void setFrameBufferBarEnabled(bool value);
     bool recordingRedTimecodeEnabled() const;
     void setRecordingRedTimecodeEnabled(bool value);
+    bool audioRecordedOutlineEnabled() const;
+    void setAudioRecordedOutlineEnabled(bool value);
 
     QString timecodeMode() const;
     void setTimecodeMode(const QString &value);
@@ -366,6 +369,7 @@ signals:
     void recordingFrameEnabledChanged();
     void frameBufferBarEnabledChanged();
     void recordingRedTimecodeEnabledChanged();
+    void audioRecordedOutlineEnabledChanged();
     void timecodeModeChanged();
     void photoModeEnabledChanged();
     void photoLongExposureEnabledChanged();
@@ -478,6 +482,7 @@ private:
     bool m_recordingFrameEnabled = false;
     bool m_frameBufferBarEnabled = false;
     bool m_recordingRedTimecodeEnabled = true;
+    bool m_audioRecordedOutlineEnabled = true;
     QString m_timecodeMode = "Free Run";
     bool m_photoModeEnabled = false;
     bool m_photoLongExposureEnabled = false;

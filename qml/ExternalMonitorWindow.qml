@@ -990,7 +990,9 @@ Window {
                 radius: 10
                 color: "#38000000"
                 border.width: 1
-                border.color: root.inputVolumeLevel <= 0 ? "#664a2f2f" : "#26ffffff"
+                border.color: (root.recordAudioEnabled && root.audioInputAvailable
+                               && (!settingsBridge || settingsBridge.audioRecordedOutlineEnabled)) ? "#73fb2c36"
+                              : (root.inputVolumeLevel <= 0 ? "#664a2f2f" : "#26ffffff")
                 layer.enabled: visible
                 layer.smooth: true
 

@@ -5,6 +5,7 @@ Rectangle {
 
     property int inputLevel: 0
     property bool muted: false
+    property bool soundRecorded: false
     property real backgroundOpacity: 1.0
     property bool compact: false
     property bool large: false
@@ -34,7 +35,8 @@ Rectangle {
     radius: height / 2
     color: compact ? compactFill : "#000000"
     border.width: 1
-    border.color: root.muted ? "#3a2a2a" : (compact ? compactBorder : "#20ffffff")
+    border.color: root.soundRecorded ? "#73fb2c36"
+                  : (root.muted ? "#3a2a2a" : (compact ? compactBorder : "#20ffffff"))
 
     function fadedColor(r, g, b, baseAlpha) {
         return Qt.rgba(r / 255.0,
