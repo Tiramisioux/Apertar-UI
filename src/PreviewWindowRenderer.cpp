@@ -301,6 +301,12 @@ PreviewWindowRenderer::PreviewWindowRenderer(QObject *parent)
                             (pi3 && !envFlagEnabled("APERTAR_PREVIEW_FORCE_EGL"));
     if (pi3)
         m_directWindowRendering = true;
+    // A/B: draw the processed preview straight into the window (the Pi 3 path), without the display-size
+    // framebuffer and its copy on every redraw; peaking still runs per screen pixel.
+    if (!pi3 && envFlagEnabled("APERTAR_PREVIEW_DIRECT")) {
+        m_directWindowRendering = true;
+        qInfo() << "Apertar preview: drawing straight into the window (APERTAR_PREVIEW_DIRECT).";
+    }
     if (m_forcePlanarFallback && !m_forceCpuFallback)
         qInfo() << "Apertar preview: using planar YUV texture path for Pi3/VC4 compatibility.";
     m_allowCpuFallback = m_forceCpuFallback || m_forcePlanarFallback;
