@@ -2712,7 +2712,7 @@ Timer {
             z: 20
             anchors.left: captureStatusChip.right
             anchors.leftMargin: Math.max(7, Math.round(captureStatusChip.height * 0.25))
-                                + (root.controlBridge && root.controlBridge.recordingHasDroppedFrames ? captureStatusChip.height + Math.max(7, Math.round(captureStatusChip.height * 0.25)) : 0)
+                                + (droppedFrameWarning.visible ? droppedFrameWarning.width + Math.max(7, Math.round(captureStatusChip.height * 0.25)) : 0)
             anchors.verticalCenter: captureStatusChip.verticalCenter
             height: captureStatusChip.height
             errors: root.controlBridge ? root.controlBridge.controlsErrors : 0
@@ -2721,12 +2721,14 @@ Timer {
         }
 
         DroppedFrameWarning {
+            id: droppedFrameWarning
             z: 20
             anchors.left: captureStatusChip.right
             anchors.leftMargin: Math.max(7, Math.round(captureStatusChip.height * 0.25))
             anchors.verticalCenter: captureStatusChip.verticalCenter
             height: captureStatusChip.height
             visible: root.controlBridge ? root.controlBridge.recordingHasDroppedFrames : false
+            count: root.controlBridge ? root.controlBridge.recordingDroppedFrames : 0
             opacity: root.effectiveControlsOpacity
         }
 

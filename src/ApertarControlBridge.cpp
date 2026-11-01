@@ -1344,6 +1344,7 @@ void ApertarControlBridge::applyCoreMessage(const QJsonObject &message)
     }
     if (event == QStringLiteral("buffer")) {
         applyBufferState(message);
+        applyRecordingDroppedFrames(message);   // the count rides on the buffer event while a take runs
         return;
     }
 
@@ -1453,6 +1454,7 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
             emit recordingHealthChanged();
         }
     }
+    applyRecordingDroppedFrames(state);
     if (state.contains(QStringLiteral("recording_error"))) {
         const auto recordingError = state.value(QStringLiteral("recording_error")).toString();
         const bool changed = recordingError != m_lastRecordingError;
@@ -2645,6 +2647,18 @@ void ApertarControlBridge::setAutofocusWindowValue(const QString &value)
 
     m_autofocusWindow = value;
     emit autofocusWindowChanged();
+}
+
+void ApertarControlBridge::applyRecordingDroppedFrames(const QJsonObject &state)
+{
+    if (!state.contains(QStringLiteral("recording_dropped_frames")))
+        return;
+    const int frames = static_cast<int>(std::clamp<qint64>(state.value(QStringLiteral("recording_dropped_frames")).toInteger(0),
+                                                           0, 999999));
+    if (m_recordingDroppedFrames != frames) {
+        m_recordingDroppedFrames = frames;
+        emit recordingHealthChanged();
+    }
 }
 
 void ApertarControlBridge::applyBufferState(const QJsonObject &state)

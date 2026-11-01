@@ -58,6 +58,7 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(QString autofocusWindow READ autofocusWindow NOTIFY autofocusWindowChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
     Q_PROPERTY(bool recordingHasDroppedFrames READ recordingHasDroppedFrames NOTIFY recordingHealthChanged)
+    Q_PROPERTY(int recordingDroppedFrames READ recordingDroppedFrames NOTIFY recordingHealthChanged)
     Q_PROPERTY(double bufferFill READ bufferFill NOTIFY bufferFillChanged)
     Q_PROPERTY(QString bufferMode READ bufferMode NOTIFY bufferModeChanged)
     Q_PROPERTY(bool bufferSafetyStop READ bufferSafetyStop NOTIFY bufferSafetyStopChanged)
@@ -138,6 +139,7 @@ public:
     QString autofocusWindow() const;
     bool recording() const;
     bool recordingHasDroppedFrames() const { return m_recordingHasDroppedFrames; }
+    int recordingDroppedFrames() const { return m_recordingDroppedFrames; }
     double bufferFill() const { return m_bufferFill; }
     QString bufferMode() const { return m_bufferMode; }
     bool bufferSafetyStop() const { return m_bufferSafetyStop; }
@@ -359,6 +361,7 @@ private:
     void setAutofocusWindowValue(const QString &value);
     void setRecordingState(bool value);
     void applyBufferState(const QJsonObject &state);
+    void applyRecordingDroppedFrames(const QJsonObject &state);
     void applyCdngLogState(const QJsonObject &state);
     void setTimelapseActiveState(bool value);
     void setTimelapseShotCount(qulonglong value);
@@ -444,6 +447,7 @@ private:
     bool m_whiteBalanceSetByCamera = false;
     bool m_shutterSetByCamera = false;
     bool m_recordingHasDroppedFrames = false;
+    int m_recordingDroppedFrames = 0; // the take's dropped frames, all kinds (Core recording_dropped_frames)
     int m_controlsErrors = 0;
     int m_controlsWarnings = 0;
     void setControlsStatus(const QJsonObject &object, const QString &errorsKey, const QString &warningsKey);

@@ -1182,6 +1182,7 @@ Window {
                         anchors.verticalCenter: parent.verticalCenter
                         height: 30
                         visible: apertarControlBridge ? apertarControlBridge.recordingHasDroppedFrames : false
+                        count: apertarControlBridge ? apertarControlBridge.recordingDroppedFrames : 0
                     }
                 }
             }
