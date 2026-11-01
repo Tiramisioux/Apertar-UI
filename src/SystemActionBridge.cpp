@@ -9,13 +9,14 @@
 #include <QDBusVariant>
 #include <QDir>
 #include <QElapsedTimer>
-#include <cstring>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLocalSocket>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QThread>
-#include <QTemporaryFile>
 #include <QTime>
 #include <QTimeZone>
 
@@ -61,66 +62,38 @@ QString hwclockProgram()
     return path;
 }
 
-QString fanModeBlock(const QString &mode)
+// Synchronous request to Apertar Core, same pattern as MediaStatusBridge.
+bool coreFanModeCommand(const QString &mode, QString *error)
 {
-    if (mode == QStringLiteral("Auto"))
-        return QString();
-
-    QStringList lines;
-    lines << QString::fromLatin1(kFanBlockStart);
-    lines << QStringLiteral("# mode: %1").arg(mode);
-    lines << QStringLiteral("dtparam=cooling_fan=on");
-
-    if (mode == QStringLiteral("Silent")) {
-        lines << QStringLiteral("dtparam=fan_temp0=60000");
-        lines << QStringLiteral("dtparam=fan_temp0_hyst=5000");
-        lines << QStringLiteral("dtparam=fan_temp0_speed=90");
-        lines << QStringLiteral("dtparam=fan_temp1=70000");
-        lines << QStringLiteral("dtparam=fan_temp1_hyst=5000");
-        lines << QStringLiteral("dtparam=fan_temp1_speed=140");
-        lines << QStringLiteral("dtparam=fan_temp2=77500");
-        lines << QStringLiteral("dtparam=fan_temp2_hyst=4000");
-        lines << QStringLiteral("dtparam=fan_temp2_speed=190");
-        lines << QStringLiteral("dtparam=fan_temp3=82000");
-        lines << QStringLiteral("dtparam=fan_temp3_hyst=3000");
-        lines << QStringLiteral("dtparam=fan_temp3_speed=255");
-    } else if (mode == QStringLiteral("Full Blast")) {
-        lines << QStringLiteral("dtparam=fan_temp0=0");
-        lines << QStringLiteral("dtparam=fan_temp0_hyst=0");
-        lines << QStringLiteral("dtparam=fan_temp0_speed=255");
-        lines << QStringLiteral("dtparam=fan_temp1=1000");
-        lines << QStringLiteral("dtparam=fan_temp1_hyst=0");
-        lines << QStringLiteral("dtparam=fan_temp1_speed=255");
-        lines << QStringLiteral("dtparam=fan_temp2=2000");
-        lines << QStringLiteral("dtparam=fan_temp2_hyst=0");
-        lines << QStringLiteral("dtparam=fan_temp2_speed=255");
-        lines << QStringLiteral("dtparam=fan_temp3=3000");
-        lines << QStringLiteral("dtparam=fan_temp3_hyst=0");
-        lines << QStringLiteral("dtparam=fan_temp3_speed=255");
+    constexpr int kId = 42002;
+    constexpr int kTimeoutMs = 8000;
+    QLocalSocket socket;
+    socket.connectToServer(qEnvironmentVariable("APERTAR_CONTROL_SOCKET", "/tmp/apertar-core.sock"));
+    if (!socket.waitForConnected(1000)) {
+        *error = QStringLiteral("Connect to Apertar Core before changing the fan mode.");
+        return false;
     }
-
-    lines << QString::fromLatin1(kFanBlockEnd);
-    return lines.join('\n') + QLatin1Char('\n');
-}
-
-QString stripManagedFanBlock(QString text)
-{
-    const int start = text.indexOf(QString::fromLatin1(kFanBlockStart));
-    if (start < 0)
-        return text;
-
-    int end = text.indexOf(QString::fromLatin1(kFanBlockEnd), start);
-    if (end < 0)
-        return text;
-
-    end += int(strlen(kFanBlockEnd));
-    while (end < text.size() && (text.at(end) == QLatin1Char('\n') || text.at(end) == QLatin1Char('\r')))
-        ++end;
-
-    text.remove(start, end - start);
-    while (text.contains(QStringLiteral("\n\n\n")))
-        text.replace(QStringLiteral("\n\n\n"), QStringLiteral("\n\n"));
-    return text;
+    socket.write(QJsonDocument(QJsonObject{{"cmd", "set_fan_mode"}, {"id", kId}, {"value", mode}})
+                     .toJson(QJsonDocument::Compact) + '\n');
+    QElapsedTimer clock;
+    clock.start();
+    while (clock.elapsed() < kTimeoutMs) {
+        while (socket.canReadLine()) {
+            const auto reply = QJsonDocument::fromJson(socket.readLine()).object();
+            if (reply.value("id").toInt(-1) != kId)
+                continue;
+            if (reply.value("ok").toBool())
+                return true;
+            *error = reply.value("error").toString();
+            if (error->isEmpty())
+                *error = QStringLiteral("Could not update the fan mode configuration.");
+            return false;
+        }
+        if (!socket.waitForReadyRead(qMax(1, int(kTimeoutMs - clock.elapsed()))))
+            break;
+    }
+    *error = QStringLiteral("Core did not confirm the fan mode change. Check its status before retrying.");
+    return false;
 }
 
 QString detectManagedFanMode(const QString &text)
@@ -428,49 +401,9 @@ bool SystemActionBridge::applyFanMode(const QString &mode)
         return false;
     }
 
-    QFile configFile(QString::fromLatin1(kBootConfigPath));
-    if (!configFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        setLastError(QStringLiteral("Could not read /boot/firmware/config.txt."));
-        return false;
-    }
-
-    QString configText = QString::fromUtf8(configFile.readAll());
-    configFile.close();
-
-    configText = stripManagedFanBlock(configText).trimmed();
-    if (!configText.isEmpty())
-        configText.append(QLatin1String("\n\n"));
-    configText.append(fanModeBlock(normalizedMode));
-
-    QTemporaryFile tempFile;
-    tempFile.setAutoRemove(false);
-    if (!tempFile.open()) {
-        setLastError(QStringLiteral("Could not prepare the fan mode update."));
-        return false;
-    }
-
-    tempFile.write(configText.toUtf8());
-    tempFile.flush();
-    tempFile.close();
-
+    // Core owns /boot/firmware/config.txt; ask it to change the fan mode.
     QString errorMessage;
-    const bool copied = invokePrivilegedCommand(QStringLiteral("install"),
-                                                {QStringLiteral("-m"),
-                                                 QStringLiteral("644"),
-                                                 tempFile.fileName(),
-                                                 QString::fromLatin1(kBootConfigPath)},
-                                                &errorMessage);
-    QFile::remove(tempFile.fileName());
-
-    if (!copied) {
-        if (errorMessage.contains(QStringLiteral("password"), Qt::CaseInsensitive)
-            || errorMessage.contains(QStringLiteral("permission denied"), Qt::CaseInsensitive)
-            || errorMessage.contains(QStringLiteral("not allowed"), Qt::CaseInsensitive)) {
-            errorMessage = QStringLiteral("Changing the fan mode needs sudo permission.");
-        }
-
-        if (errorMessage.isEmpty())
-            errorMessage = QStringLiteral("Could not update the fan mode configuration.");
+    if (!coreFanModeCommand(normalizedMode, &errorMessage)) {
         setLastError(errorMessage);
         return false;
     }
