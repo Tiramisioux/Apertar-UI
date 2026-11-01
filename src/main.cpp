@@ -15,6 +15,7 @@
 #include <QVariant>
 
 #include "PreviewWindowRenderer.hpp"
+#include "DrmPreviewPlane.hpp"
 #include "CameraPreviewItem.hpp"
 #include "ApertarPreviewSocketClient.hpp"
 #include "SystemStatsBridge.hpp"
@@ -262,6 +263,11 @@ int main(int argc, char *argv[])
     fmt.setProfile(QSurfaceFormat::NoProfile);
     fmt.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     fmt.setSwapInterval(1);
+    // A/B: the picture on the DRM primary plane, straight from the camera dma-buf, and the UI on an ARGB overlay above it.
+    // Qt reads its KMS environment when the application is constructed, so this has to happen before it.
+    if (environmentFlagEnabled("APERTAR_PREVIEW_PLANE") && !environmentFlagEnabled("APERTAR_MONITOR_ONLY")
+        && DrmPreviewPlane::configureQt())
+        fmt.setAlphaBufferSize(8);
     QSurfaceFormat::setDefaultFormat(fmt);
 
     QGuiApplication app(argc, argv);

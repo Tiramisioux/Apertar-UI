@@ -2,6 +2,7 @@
 #include "ApertarPreviewSocketClient.hpp"
 #include "CameraPreviewItem.hpp"
 #include "PreviewExposureReference.hpp"
+#include "DrmPreviewPlane.hpp"
 
 #include <QQuickWindow>
 #include <QQuickItem>
@@ -416,7 +417,8 @@ void PreviewWindowRenderer::handleWindowChanged(QQuickWindow *window)
     if (!m_window)
         return;
 
-    m_window->setColor(Qt::black);
+    // With the picture on a plane below, the Qt layer has to be transparent wherever nothing is drawn.
+    m_window->setColor(m_plane ? Qt::transparent : Qt::black);
 
     connect(m_window, &QQuickWindow::beforeSynchronizing,
             this, &PreviewWindowRenderer::syncState,
@@ -730,6 +732,7 @@ void PreviewWindowRenderer::initializePipeline()
     uniform vec3 uFocusPeakingColor;
     uniform int uFastPeaking;
     uniform sampler2D uTexLuma;
+    uniform int uOverlayOnly;
 
     uniform int uGrayscaleEnabled;
     uniform int uSmpteEnabled;
@@ -905,6 +908,8 @@ void PreviewWindowRenderer::initializePipeline()
             exposureLuma=luminance(exposureReferenceRgb(src.rgb));
 
         vec4 outColor = src;
+        // uOverlayOnly: the picture is on a DRM plane below; output only the marks, premultiplied.
+        vec4 mark = vec4(0.0);
 
         if (uSmpteEnabled != 1) {
             if (uLutPreviewEnabled == 1)
@@ -928,6 +933,7 @@ void PreviewWindowRenderer::initializePipeline()
                 float stripe = fract((vUv.x + vUv.y) * 40.0 + uTime * 0.8);
                 vec3 zebraColor = (stripe < 0.5) ? vec3(0.03) : vec3(1.0);
                 outColor.rgb = mix(outColor.rgb, zebraColor, 0.72);
+                mark = vec4(zebraColor * 0.72, 0.72);
             }
 
             if (uFocusPeakingEnabled == 1) {
@@ -935,11 +941,12 @@ void PreviewWindowRenderer::initializePipeline()
                            : (uFastPeaking == 1 ? fastEdgeStrength(vUv) : edgeStrength(vUv, exposureLuma));
                 if (edge > uFocusPeakingThreshold) {
                     outColor.rgb = mix(outColor.rgb, uFocusPeakingColor, 0.95);
+                    mark = mark * 0.05 + vec4(uFocusPeakingColor * 0.95, 0.95);
                 }
             }
         }
 
-        gl_FragColor = outColor;
+        gl_FragColor = uOverlayOnly == 1 ? mark : outColor;
     }
 )";
 
@@ -1168,6 +1175,7 @@ void PreviewWindowRenderer::initializePipeline()
         m_lutPreviewTextureLoc = glGetUniformLocation(m_processProgram, "uLutPreviewTex");
         m_lutPreviewSizeLoc = glGetUniformLocation(m_processProgram, "uLutPreviewSize");
         m_lutPreviewColumnsLoc = glGetUniformLocation(m_processProgram, "uLutPreviewColumns");
+        m_overlayOnlyLoc = glGetUniformLocation(m_processProgram, "uOverlayOnly");
     }
 
     if (m_passthroughProgram) {
@@ -1199,6 +1207,7 @@ void PreviewWindowRenderer::initializePipeline()
         m_lutPreviewTexture2DLoc = glGetUniformLocation(m_processProgram2D, "uLutPreviewTex");
         m_lutPreviewSize2DLoc = glGetUniformLocation(m_processProgram2D, "uLutPreviewSize");
         m_lutPreviewColumns2DLoc = glGetUniformLocation(m_processProgram2D, "uLutPreviewColumns");
+        m_overlayOnly2DLoc = glGetUniformLocation(m_processProgram2D, "uOverlayOnly");
     }
 
     if (m_passthroughProgram2D) {
@@ -1232,6 +1241,7 @@ void PreviewWindowRenderer::initializePipeline()
         m_lutPreviewTexturePlanarLoc = glGetUniformLocation(m_processProgramPlanar, "uLutPreviewTex");
         m_lutPreviewSizePlanarLoc = glGetUniformLocation(m_processProgramPlanar, "uLutPreviewSize");
         m_lutPreviewColumnsPlanarLoc = glGetUniformLocation(m_processProgramPlanar, "uLutPreviewColumns");
+        m_overlayOnlyPlanarLoc = glGetUniformLocation(m_processProgramPlanar, "uOverlayOnly");
     }
 
     if (m_passthroughProgramPlanar) {
@@ -1356,6 +1366,9 @@ void PreviewWindowRenderer::updateCpuEdgeMask(uint64_t sequence)
 
 void PreviewWindowRenderer::cleanupImportedBuffers()
 {
+    if (m_plane)
+        m_plane->releaseBuffers();
+
     auto destroyImage = reinterpret_cast<PFNEGLDESTROYIMAGEKHRPROC>(eglGetProcAddress("eglDestroyImageKHR"));
     EGLDisplay dpy = eglGetCurrentDisplay();
 
@@ -2278,6 +2291,7 @@ void PreviewWindowRenderer::renderProcessedPreview(const PreviewFrameInfo &frame
             glActiveTexture(GL_TEXTURE5);
             glBindTexture(GL_TEXTURE_2D, cpuMask ? m_edgeTexture : m_currentLumaTexture);
         }
+        glUniform1i(planarTexture ? m_overlayOnlyPlanarLoc : (cpuTexture ? m_overlayOnly2DLoc : m_overlayOnlyLoc), 0);
         glUniform1i(planarTexture ? m_grayscaleEnabledPlanarLoc : (cpuTexture ? m_grayscaleEnabled2DLoc : m_grayscaleEnabledLoc), state.grayscaleEnabled ? 1 : 0);
         glUniform1i(planarTexture ? m_smpteEnabledPlanarLoc : (cpuTexture ? m_smpteEnabled2DLoc : m_smpteEnabledLoc), state.smpteEnabled ? 1 : 0);
         glUniform1i(planarTexture ? m_falseColorEnabledPlanarLoc : (cpuTexture ? m_falseColorEnabled2DLoc : m_falseColorEnabledLoc), state.falseColorEnabled ? 1 : 0);
@@ -2370,7 +2384,7 @@ void PreviewWindowRenderer::blitPreviewToWindow(const QRectF &rect, float winH)
     extra->glBindFramebuffer(GL_DRAW_FRAMEBUFFER, drawFbo);
 }
 
-void PreviewWindowRenderer::renderDirectToWindow(const PreviewFrameInfo &frame, const QRectF &rect, float winH)
+void PreviewWindowRenderer::renderDirectToWindow(const PreviewFrameInfo &frame, const QRectF &rect, float winH, bool overlayOnly)
 {
     const bool planarTexture = m_currentTextureIsPlanar;
     const bool cpuTexture = m_currentTextureTarget == GL_TEXTURE_2D && !planarTexture;
@@ -2449,6 +2463,11 @@ void PreviewWindowRenderer::renderDirectToWindow(const PreviewFrameInfo &frame, 
     glDisable(GL_STENCIL_TEST);
     glDisable(GL_CULL_FACE);
     glDisable(GL_BLEND);
+    if (overlayOnly) {
+        // The picture is on a plane below: only the marks are drawn, premultiplied, over the transparent Qt layer.
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    }
 
     const bool lutPreviewReady = state.lutPreviewEnabled
                                  && !state.lutPreviewFile.isEmpty()
@@ -2516,6 +2535,7 @@ void PreviewWindowRenderer::renderDirectToWindow(const PreviewFrameInfo &frame, 
             glActiveTexture(GL_TEXTURE5);
             glBindTexture(GL_TEXTURE_2D, cpuMask ? m_edgeTexture : m_currentLumaTexture);
         }
+        glUniform1i(planarTexture ? m_overlayOnlyPlanarLoc : (cpuTexture ? m_overlayOnly2DLoc : m_overlayOnlyLoc), overlayOnly ? 1 : 0);
         glUniform1i(planarTexture ? m_grayscaleEnabledPlanarLoc : (cpuTexture ? m_grayscaleEnabled2DLoc : m_grayscaleEnabledLoc), state.grayscaleEnabled ? 1 : 0);
         glUniform1i(planarTexture ? m_smpteEnabledPlanarLoc : (cpuTexture ? m_smpteEnabled2DLoc : m_smpteEnabledLoc), state.smpteEnabled ? 1 : 0);
         glUniform1i(planarTexture ? m_falseColorEnabledPlanarLoc : (cpuTexture ? m_falseColorEnabled2DLoc : m_falseColorEnabledLoc), state.falseColorEnabled ? 1 : 0);
@@ -2551,6 +2571,8 @@ void PreviewWindowRenderer::renderDirectToWindow(const PreviewFrameInfo &frame, 
     }
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    if (overlayOnly)
+        glDisable(GL_BLEND);
 
     if (!usePassthrough) {
         glActiveTexture(GL_TEXTURE3);
@@ -2574,6 +2596,65 @@ void PreviewWindowRenderer::renderDirectToWindow(const PreviewFrameInfo &frame, 
     m_previewCacheState = state;
 }
 
+bool PreviewWindowRenderer::showOnPlane(const PreviewFrameInfo &frame, const QRectF &rect, const PreviewCacheState &state)
+{
+    if (!m_plane)
+        return false;
+
+    if (!m_planeAttached) {
+        m_planeAttached = true;
+        if (!m_plane->attach()) {
+            m_plane.reset();
+            if (m_window)
+                m_window->setColor(Qt::black);
+            return false;
+        }
+    }
+
+    // The plane shows the camera picture as it is; anything that changes the picture itself needs the GPU.
+    const bool lutPreview = state.lutPreviewEnabled && !state.lutPreviewFile.isEmpty();
+    const bool eligible = !m_plane->failed()
+                          && m_item && m_item->isVisible()
+                          && m_currentImported
+                          && !m_currentTextureIsPlanar
+                          && m_currentTextureTarget == GL_TEXTURE_EXTERNAL_OES
+                          && m_currentImported->dupFds[0] >= 0
+                          && !lutPreview
+                          && !state.grayscaleEnabled
+                          && !state.falseColorEnabled
+                          && !state.smpteEnabled
+                          && (state.displayRotation == 0 || state.displayRotation == 180);
+    if (!eligible) {
+        m_plane->hide();
+        return false;
+    }
+
+    // The same source crop the shader path samples; the destination is the letterboxed preview rectangle.
+    const PreviewUvRect uv = croppedPreviewUvRect(state.sourceWidth,
+                                                  state.sourceHeight,
+                                                  state.previewAspectRatio,
+                                                  state.zoom,
+                                                  state.panX,
+                                                  state.panY);
+    DrmPreviewPlane::Placement placement;
+    placement.dstX = int(std::lround(rect.left()));
+    placement.dstY = int(std::lround(rect.top()));
+    placement.dstW = std::max(1, int(std::lround(rect.width())));
+    placement.dstH = std::max(1, int(std::lround(rect.height())));
+    placement.srcX = double(uv.u0) * m_currentImported->width;
+    placement.srcY = double(uv.v0) * m_currentImported->height;
+    placement.srcW = double(uv.u1 - uv.u0) * m_currentImported->width;
+    placement.srcH = double(uv.v1 - uv.v0) * m_currentImported->height;
+    placement.rotate180 = state.displayRotation == 180;
+
+    if (!m_plane->show(m_currentImported->dupFds[0], m_currentImported->sourceBufferKey, frame.sequence,
+                       m_currentImported->width, m_currentImported->height, m_currentImported->stride, placement)) {
+        m_plane->hide();
+        return false;
+    }
+    return true;
+}
+
 void PreviewWindowRenderer::render()
 {
     if (!m_window || !m_item)
@@ -2583,6 +2664,18 @@ void PreviewWindowRenderer::render()
     m_window->beginExternalCommands();
 
     initialize();
+
+    // A/B: the picture on the DRM primary plane straight from the camera buffer, the UI above it (see main.cpp).
+    // Claimed by the first renderer that draws: with hdmi_external_only the main window is hidden and the
+    // external-monitor window shows the picture.
+    if (!m_planeClaimTried) {
+        m_planeClaimTried = true;
+        if (envFlagEnabled("APERTAR_PREVIEW_PLANE")) {
+            m_plane = DrmPreviewPlane::create();
+            if (m_plane)
+                m_window->setColor(Qt::transparent);
+        }
+    }
 
     if (m_resetPreviewState) {
         cleanupImportedBuffers();
@@ -2645,7 +2738,11 @@ void PreviewWindowRenderer::render()
     if (previewAidEnabled && !hasProcessingProgram)
         ensurePlanarProcessingTexture(*latestFrame);
 
-    if (m_directWindowRendering) {
+    if (m_plane && showOnPlane(*latestFrame, r, drawState)) {
+        // The picture is on the plane below; the GPU draws only the zebra and peaking marks.
+        if (hasProcessingProgram && (drawState.zebraEnabled || drawState.focusPeakingEnabled))
+            renderDirectToWindow(*latestFrame, r, winH, true);
+    } else if (m_directWindowRendering) {
         renderDirectToWindow(*latestFrame, r, winH);
     } else {
         renderProcessedPreview(*latestFrame, targetSize);

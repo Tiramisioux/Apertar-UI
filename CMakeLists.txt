@@ -11,6 +11,8 @@ find_package(Qt6 REQUIRED COMPONENTS Core DBus Gui Network Qml Quick QuickContro
 find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
 find_package(TIFF REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBDRM REQUIRED IMPORTED_TARGET libdrm)
 
 if(Qt6_VERSION VERSION_GREATER_EQUAL "6.8")
     qt_policy(SET QTP0004 NEW)
@@ -72,6 +74,8 @@ add_executable(ApertarUI
     src/CameraPreviewItem.hpp
     src/PreviewWindowRenderer.cpp
     src/PreviewWindowRenderer.hpp
+    src/DrmPreviewPlane.cpp
+    src/DrmPreviewPlane.hpp
     src/SystemStatsBridge.cpp
     src/SystemStatsBridge.hpp
     src/DeviceInfoBridge.cpp
@@ -219,6 +223,7 @@ target_link_libraries(ApertarUI PRIVATE
     EGL
     GLESv2
     TIFF::TIFF
+    PkgConfig::LIBDRM
 )
 
 # Qt's screen-power API is private. Cross-builds without matching headers
