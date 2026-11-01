@@ -45,6 +45,8 @@ private:
     {
         GLuint texture = 0;
         EGLImageKHR image = EGL_NO_IMAGE_KHR;
+        GLuint lumaTexture = 0;                     // APERTAR_PREVIEW_PEAKING=fast: the Y plane as R8
+        EGLImageKHR lumaImage = EGL_NO_IMAGE_KHR;
         int dupFd = -1;
         std::array<int, 3> dupFds = { -1, -1, -1 };
         int sourceProcId = -1;
@@ -195,6 +197,8 @@ private:
     GLint m_uZebraThresholdPlanarLoc = -1;
 
     GLint m_focusPeakingEnabledLoc = -1;
+    GLint m_fastPeakingLoc = -1;
+    GLint m_lumaTexLoc = -1;
     GLint m_focusPeakingThresholdLoc = -1;
     GLint m_focusPeakingColorLoc = -1;
     GLint m_focusPeakingEnabled2DLoc = -1;
@@ -235,6 +239,7 @@ private:
 
     std::unordered_map<uint64_t, ImportedBuffer> m_importedBuffers;
     GLuint m_currentTexture = 0;
+    GLuint m_currentLumaTexture = 0;
     GLenum m_currentTextureTarget = GL_TEXTURE_EXTERNAL_OES;
     GLuint m_planarTextures[3] = { 0, 0, 0 };
     GLuint m_cpuFallbackTexture = 0;
@@ -271,6 +276,8 @@ private:
     bool m_updatePending = false;
     bool m_directWindowRendering = false;
     bool m_forcePlanarFallback = false;
+    bool m_fastPeaking = false;          // APERTAR_PREVIEW_PEAKING=fast
+    bool m_loggedLumaImportFailure = false;
     bool m_forceCpuFallback = false;
     bool m_allowCpuFallback = false;
     bool m_currentTextureIsPlanar = false;
