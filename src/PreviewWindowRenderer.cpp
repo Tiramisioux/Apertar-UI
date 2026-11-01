@@ -20,6 +20,10 @@
 
 #include <unistd.h>
 #include <sys/mman.h>
+#include <sys/ioctl.h>
+#include <linux/dma-buf.h>
+#include <cstring>
+#include <cstdlib>
 #include <sys/stat.h>
 #include <libdrm/drm_fourcc.h>
 #include <array>
@@ -311,9 +315,14 @@ PreviewWindowRenderer::PreviewWindowRenderer(QObject *parent)
         qInfo() << "Apertar preview: using planar YUV texture path for Pi3/VC4 compatibility.";
     m_allowCpuFallback = m_forceCpuFallback || m_forcePlanarFallback;
     // A/B: focus peaking from the Y plane (one 8-bit fetch per tap) instead of three full YUV-to-RGB samples.
-    m_fastPeaking = qgetenv("APERTAR_PREVIEW_PEAKING") == QByteArrayLiteral("fast");
+    const QByteArray peakingMode = qgetenv("APERTAR_PREVIEW_PEAKING");
+    m_fastPeaking = peakingMode == QByteArrayLiteral("fast");
+    // cpu: the edge mask is computed on the CPU once per preview frame; the shader only reads it.
+    m_cpuPeaking = peakingMode == QByteArrayLiteral("cpu");
     if (m_fastPeaking)
         qInfo() << "Apertar preview: fast focus peaking from the Y plane (APERTAR_PREVIEW_PEAKING=fast).";
+    if (m_cpuPeaking)
+        qInfo() << "Apertar preview: focus peaking mask from the CPU (APERTAR_PREVIEW_PEAKING=cpu).";
 
     m_shaderTimer.start();
 }
@@ -321,6 +330,7 @@ PreviewWindowRenderer::PreviewWindowRenderer(QObject *parent)
 PreviewWindowRenderer::~PreviewWindowRenderer()
 {
     if (m_exposureTexture) glDeleteTextures(1,&m_exposureTexture);
+    if (m_edgeTexture) glDeleteTextures(1, &m_edgeTexture);
     cleanupImportedBuffers();
     clearLutTexture();
     if (m_neutralLutTexture)
@@ -921,7 +931,8 @@ void PreviewWindowRenderer::initializePipeline()
             }
 
             if (uFocusPeakingEnabled == 1) {
-                float edge = uFastPeaking == 1 ? fastEdgeStrength(vUv) : edgeStrength(vUv, exposureLuma);
+                float edge = uFastPeaking == 2 ? texture2D(uTexLuma, vUv).r
+                           : (uFastPeaking == 1 ? fastEdgeStrength(vUv) : edgeStrength(vUv, exposureLuma));
                 if (edge > uFocusPeakingThreshold) {
                     outColor.rgb = mix(outColor.rgb, uFocusPeakingColor, 0.95);
                 }
@@ -1281,6 +1292,68 @@ void PreviewWindowRenderer::ensurePreviewTarget(const QSize &size)
     m_previewCacheState.reset();
 }
 
+// APERTAR_PREVIEW_PEAKING=cpu: the edge |Y(x+1)-Y(x)| + |Y(y+1)-Y(y)| of the shown buffer, once per preview frame,
+// into a source-size 8-bit mask the shader compares with the threshold. Scaled like the shader's edge: luma
+// 1.164/255 per code, and 2/3 because the shader steps 1/1920 of the picture, 2/3 of a 1280-wide source pixel
+// (199/256 ~ 1.164 * 2/3). Rows are copied out first so reads of the (possibly uncached) buffer stay sequential.
+void PreviewWindowRenderer::updateCpuEdgeMask(uint64_t sequence)
+{
+    const ImportedBuffer *buf = m_currentImported;
+    if (!buf || !buf->lumaMap || buf->width < 2 || buf->height < 2 || buf->stride < buf->width)
+        return;
+    const unsigned int w = buf->width;
+    const unsigned int h = buf->height;
+    const int fd = buf->dupFds[0];
+    m_edgeMask.resize(size_t(w) * h);
+    m_edgeRowA.resize(w);
+    m_edgeRowB.resize(w);
+
+    dma_buf_sync sync{};
+    sync.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ;
+    if (fd >= 0)
+        ::ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync);
+    std::memcpy(m_edgeRowA.data(), buf->lumaMap, w);
+    for (unsigned int y = 0; y < h; ++y) {
+        const bool lastRow = y + 1 >= h;
+        if (!lastRow)
+            std::memcpy(m_edgeRowB.data(), buf->lumaMap + size_t(y + 1) * buf->stride, w);
+        const uint8_t *cur = m_edgeRowA.data();
+        const uint8_t *next = lastRow ? cur : m_edgeRowB.data();
+        uint8_t *out = m_edgeMask.data() + size_t(y) * w;
+        for (unsigned int x = 0; x + 1 < w; ++x) {
+            const int c = cur[x];
+            const int e = std::abs(int(cur[x + 1]) - c) + std::abs(int(next[x]) - c);
+            out[x] = uint8_t(std::min(255, (e * 199) >> 8));
+        }
+        out[w - 1] = out[w - 2];
+        std::swap(m_edgeRowA, m_edgeRowB);
+    }
+    sync.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ;
+    if (fd >= 0)
+        ::ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync);
+
+    if (!m_edgeTexture || m_edgeWidth != w || m_edgeHeight != h) {
+        if (!m_edgeTexture)
+            glGenTextures(1, &m_edgeTexture);
+        glBindTexture(GL_TEXTURE_2D, m_edgeTexture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, GLsizei(w), GLsizei(h), 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, nullptr);
+        m_edgeWidth = w;
+        m_edgeHeight = h;
+    } else {
+        glBindTexture(GL_TEXTURE_2D, m_edgeTexture);
+    }
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, GLsizei(w), GLsizei(h), GL_LUMINANCE, GL_UNSIGNED_BYTE, m_edgeMask.data());
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    m_edgeSequence = sequence;
+    m_previewCacheState.reset();   // the cached preview must be redrawn with the new mask
+}
+
 void PreviewWindowRenderer::cleanupImportedBuffers()
 {
     auto destroyImage = reinterpret_cast<PFNEGLDESTROYIMAGEKHRPROC>(eglGetProcAddress("eglDestroyImageKHR"));
@@ -1294,6 +1367,8 @@ void PreviewWindowRenderer::cleanupImportedBuffers()
             destroyImage(dpy, buf.image);
         if (buf.lumaTexture)
             glDeleteTextures(1, &buf.lumaTexture);
+        if (buf.lumaMap)
+            ::munmap(const_cast<uint8_t *>(buf.lumaMap), buf.lumaMapBytes);
         if (buf.lumaImage != EGL_NO_IMAGE_KHR && destroyImage && dpy != EGL_NO_DISPLAY)
             destroyImage(dpy, buf.lumaImage);
         for (int fd : buf.dupFds) {
@@ -1307,6 +1382,7 @@ void PreviewWindowRenderer::cleanupImportedBuffers()
     m_importedBuffers.clear();
     m_currentTexture = 0;
     m_currentLumaTexture = 0;
+    m_currentImported = nullptr;
     m_importedProcId = -1;
     m_importedWidth = 0;
     m_importedHeight = 0;
@@ -1426,6 +1502,7 @@ bool PreviewWindowRenderer::uploadPlanarYuvTexture(const PreviewFrameInfo &frame
 
     m_currentTexture = m_planarTextures[0];
     m_currentLumaTexture = 0;
+    m_currentImported = nullptr;
     m_currentTextureTarget = GL_TEXTURE_2D;
     m_currentTextureIsPlanar = true;
     m_importedProcId = frame.procid;
@@ -1597,6 +1674,7 @@ bool PreviewWindowRenderer::uploadCpuFallbackTexture(const PreviewFrameInfo &fra
 
     m_currentTexture = m_cpuFallbackTexture;
     m_currentLumaTexture = 0;
+    m_currentImported = nullptr;
     m_currentTextureTarget = GL_TEXTURE_2D;
     m_currentTextureIsPlanar = false;
     m_importedProcId = frame.procid;
@@ -1702,6 +1780,7 @@ void PreviewWindowRenderer::ensureImported(const PreviewFrameInfo &frame)
             if (matchesFrame) {
                 m_currentTexture = existing.texture;
                 m_currentLumaTexture = existing.lumaTexture;
+                m_currentImported = &it->second;
                 m_currentTextureTarget = GL_TEXTURE_EXTERNAL_OES;
                 m_currentTextureIsPlanar = false;
                 m_importedProcId = frame.procid;
@@ -1719,6 +1798,7 @@ void PreviewWindowRenderer::ensureImported(const PreviewFrameInfo &frame)
             m_importedBuffers.erase(it);
             m_currentTexture = 0;
             m_currentLumaTexture = 0;
+            m_currentImported = nullptr;
 
             if (stale.texture)
                 glDeleteTextures(1, &stale.texture);
@@ -1726,6 +1806,8 @@ void PreviewWindowRenderer::ensureImported(const PreviewFrameInfo &frame)
                 destroyImage(dpy, stale.image);
             if (stale.lumaTexture)
                 glDeleteTextures(1, &stale.lumaTexture);
+            if (stale.lumaMap)
+                ::munmap(const_cast<uint8_t *>(stale.lumaMap), stale.lumaMapBytes);
             if (stale.lumaImage != EGL_NO_IMAGE_KHR && destroyImage && dpy != EGL_NO_DISPLAY)
                 destroyImage(dpy, stale.lumaImage);
             for (int fd : stale.dupFds) {
@@ -1861,6 +1943,18 @@ void PreviewWindowRenderer::ensureImported(const PreviewFrameInfo &frame)
         imported.image = image;
         imported.lumaTexture = lumaTexture;
         imported.lumaImage = lumaImage;
+        if (m_cpuPeaking) {
+            // Y starts at offset 0 on this path (offsets[0] above), so the map is the plane.
+            const size_t bytes = size_t(pitches[0]) * height;
+            void *map = offsets[0] == 0 ? ::mmap(nullptr, bytes, PROT_READ, MAP_SHARED, dupFds[0], 0) : MAP_FAILED;
+            if (map != MAP_FAILED) {
+                imported.lumaMap = static_cast<const uint8_t *>(map);
+                imported.lumaMapBytes = bytes;
+            } else if (!m_loggedEdgeMapFailure) {
+                qWarning() << "Apertar preview: mapping the Y plane for CPU peaking failed:" << std::strerror(errno);
+                m_loggedEdgeMapFailure = true;
+            }
+        }
         imported.dupFd = -1;
         imported.dupFds = dupFds;
         imported.sourceProcId = frame.procid;
@@ -1873,9 +1967,10 @@ void PreviewWindowRenderer::ensureImported(const PreviewFrameInfo &frame)
         imported.captureWidth = frame.captureWidth;
         imported.captureHeight = frame.captureHeight;
 
-        m_importedBuffers.emplace(frameBufferKey, imported);
+        const auto placed = m_importedBuffers.emplace(frameBufferKey, imported).first;
         m_currentTexture = texture;
         m_currentLumaTexture = lumaTexture;
+        m_currentImported = &placed->second;
         m_currentTextureTarget = GL_TEXTURE_EXTERNAL_OES;
         m_currentTextureIsPlanar = false;
         m_importedProcId = frame.procid;
@@ -1906,8 +2001,11 @@ void PreviewWindowRenderer::ensureImported(const PreviewFrameInfo &frame)
         return true;
     };
 
-    if (tryImportSource(frame.fdIsp, frame.width, frame.height, frame.stride))
+    if (tryImportSource(frame.fdIsp, frame.width, frame.height, frame.stride)) {
+        if (m_cpuPeaking && m_item && m_item->focusPeakingEnabled() && frame.sequence != m_edgeSequence)
+            updateCpuEdgeMask(frame.sequence);
         return;
+    }
 
     if (tryImportSource(frame.fallbackFdIsp, frame.fallbackWidth, frame.fallbackHeight, frame.fallbackStride))
         return;
@@ -1922,6 +2020,7 @@ void PreviewWindowRenderer::ensureImported(const PreviewFrameInfo &frame)
 
     m_currentTexture = 0;
     m_currentLumaTexture = 0;
+    m_currentImported = nullptr;
 }
 
 double PreviewWindowRenderer::previewDisplayAspect(const PreviewFrameInfo &frame) const
@@ -2174,9 +2273,10 @@ void PreviewWindowRenderer::renderProcessedPreview(const PreviewFrameInfo &frame
         if (!planarTexture && !cpuTexture) {
             // uTexLuma always on unit 5, never on 0 where the external camera sampler is.
             glUniform1i(m_lumaTexLoc, 5);
-            glUniform1i(m_fastPeakingLoc, m_fastPeaking && m_currentLumaTexture ? 1 : 0);
+            const bool cpuMask = m_cpuPeaking && m_edgeTexture && m_currentImported && m_currentImported->lumaMap;
+            glUniform1i(m_fastPeakingLoc, cpuMask ? 2 : (m_fastPeaking && m_currentLumaTexture ? 1 : 0));
             glActiveTexture(GL_TEXTURE5);
-            glBindTexture(GL_TEXTURE_2D, m_currentLumaTexture);
+            glBindTexture(GL_TEXTURE_2D, cpuMask ? m_edgeTexture : m_currentLumaTexture);
         }
         glUniform1i(planarTexture ? m_grayscaleEnabledPlanarLoc : (cpuTexture ? m_grayscaleEnabled2DLoc : m_grayscaleEnabledLoc), state.grayscaleEnabled ? 1 : 0);
         glUniform1i(planarTexture ? m_smpteEnabledPlanarLoc : (cpuTexture ? m_smpteEnabled2DLoc : m_smpteEnabledLoc), state.smpteEnabled ? 1 : 0);
@@ -2411,9 +2511,10 @@ void PreviewWindowRenderer::renderDirectToWindow(const PreviewFrameInfo &frame, 
         if (!planarTexture && !cpuTexture) {
             // uTexLuma always on unit 5, never on 0 where the external camera sampler is.
             glUniform1i(m_lumaTexLoc, 5);
-            glUniform1i(m_fastPeakingLoc, m_fastPeaking && m_currentLumaTexture ? 1 : 0);
+            const bool cpuMask = m_cpuPeaking && m_edgeTexture && m_currentImported && m_currentImported->lumaMap;
+            glUniform1i(m_fastPeakingLoc, cpuMask ? 2 : (m_fastPeaking && m_currentLumaTexture ? 1 : 0));
             glActiveTexture(GL_TEXTURE5);
-            glBindTexture(GL_TEXTURE_2D, m_currentLumaTexture);
+            glBindTexture(GL_TEXTURE_2D, cpuMask ? m_edgeTexture : m_currentLumaTexture);
         }
         glUniform1i(planarTexture ? m_grayscaleEnabledPlanarLoc : (cpuTexture ? m_grayscaleEnabled2DLoc : m_grayscaleEnabledLoc), state.grayscaleEnabled ? 1 : 0);
         glUniform1i(planarTexture ? m_smpteEnabledPlanarLoc : (cpuTexture ? m_smpteEnabled2DLoc : m_smpteEnabledLoc), state.smpteEnabled ? 1 : 0);
