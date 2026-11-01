@@ -29,6 +29,8 @@
         <file>qml/SystemSectionCard.qml</file>
         <file>qml/AdjustNumberTile.qml</file>
         <file>qml/ActionTile.qml</file>
+        <file>qml/ClipNameCard.qml</file>
+        <file>qml/ClipNamePill.qml</file>
         <file>qml/GyroBubbleLevel.qml</file>
         <file>qml/GyroOrientationIndicator.qml</file>
     </qresource>

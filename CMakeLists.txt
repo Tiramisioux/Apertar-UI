@@ -48,6 +48,8 @@ set(APERTAR_QML_FILES
     qml/SystemSectionCard.qml
     qml/AdjustNumberTile.qml
     qml/ActionTile.qml
+    qml/ClipNameCard.qml
+    qml/ClipNamePill.qml
     qml/GyroBubbleLevel.qml
     qml/GyroOrientationIndicator.qml
 )

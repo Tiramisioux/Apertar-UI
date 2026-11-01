@@ -629,6 +629,60 @@ void ApertarControlBridge::applyStoragePrerollAuto(bool on)
     });
 }
 
+void ApertarControlBridge::applyClipNameTemplate(const QString &value)
+{
+    // Core corrects the template (appends _{clip} if missing); its reply carries the stored template
+    // and example, applied here. A refusal (recording) comes back as an error through lastError.
+    QJsonObject reply;
+    if (sendCoreCommand(QStringLiteral("set_clip_name_template"), {
+            { QStringLiteral("value"), value }
+        }, &reply)) {
+        applyClipNameState(reply);
+    }
+}
+
+void ApertarControlBridge::requestClipNamePreview(const QString &value)
+{
+    // No side effects in Core. The reply's "example" goes to clipNamePreview only.
+    QJsonObject reply;
+    if (!sendCoreCommand(QStringLiteral("preview_clip_name"), {
+            { QStringLiteral("value"), value }
+        }, &reply)) {
+        return;
+    }
+    const QString example = reply.value(QStringLiteral("example")).toString();
+    if (m_clipNamePreview != example) {
+        m_clipNamePreview = example;
+        emit clipNamePreviewChanged();
+    }
+}
+
+void ApertarControlBridge::applyClipNameState(const QJsonObject &state)
+{
+    // Absent keys (older Core, or events without them) leave everything as it was.
+    bool changed = false;
+    if (state.contains(QStringLiteral("clip_name_template"))) {
+        const QString text = state.value(QStringLiteral("clip_name_template")).toString();
+        if (m_clipNameTemplate != text) {
+            m_clipNameTemplate = text;
+            changed = true;
+        }
+        if (!m_clipNameKnown && !text.isEmpty()) {
+            m_clipNameKnown = true;
+            changed = true;
+        }
+    }
+    if (state.contains(QStringLiteral("clip_name_example"))) {
+        const QString text = state.value(QStringLiteral("clip_name_example")).toString();
+        if (m_clipNameExample != text) {
+            m_clipNameExample = text;
+            changed = true;
+        }
+    }
+    if (changed)
+        emit clipNameChanged();
+}
+
 void ApertarControlBridge::applyBufferMode(const QString &value)
 {
     if (value != QStringLiteral("frames") && value != QStringLiteral("ram")) {
@@ -1675,6 +1729,7 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         setRecordingState(state.value(QStringLiteral("recording")).toBool(false));
     applyBufferState(state);
     applyCdngLogState(state);
+    applyClipNameState(state);
 
     if (state.contains(QStringLiteral("photo_write_error"))) {
         const QString error = state.value(QStringLiteral("photo_write_error")).toString();

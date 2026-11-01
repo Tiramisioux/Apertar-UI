@@ -7,6 +7,7 @@ Item {
     id: root
 
     signal backRequested()
+    signal clipTextEntered(string text)
 
     FontLoader { id: interRegular; source: "qrc:/qml/fonts/Inter/Inter-Regular.ttf" }
     FontLoader { id: interMedium;  source: "qrc:/qml/fonts/Inter/Inter-Medium.ttf" }
@@ -750,6 +751,7 @@ Item {
     property bool wifiKeyboardLongPressHandled: false
     property string wifiKeyboardMode: "letters"
     property bool presetNamePopupOpen: false
+    property string presetPopupPurpose: "preset" // "preset" or "clipText" (free text for a clip-name pill)
     property string presetNameDraft: ""
     property bool presetKeyboardShift: false
     property bool presetKeyboardCapsLock: false
@@ -805,7 +807,8 @@ Item {
         "tuningFile",
         "gyroData",
         "autofocus",
-        "timecode"
+        "timecode",
+        "clipNames"
     ]
     readonly property var defaultAudioOrder: [
         "audioOptions",
@@ -909,7 +912,7 @@ Item {
             reorderPopupOpen = false
         if (favoriteManagerOpen && selectedSection !== "Favorites")
             favoriteManagerOpen = false
-        if (presetNamePopupOpen && selectedSection !== "Presets")
+        if (presetNamePopupOpen && selectedSection !== (presetPopupPurpose === "clipText" ? "Record" : "Presets"))
             root.closePresetNamePopup()
 
         root.updateSectionActivity()
@@ -1104,6 +1107,7 @@ Item {
             if (itemId === "gyroData") return "Gyro"
             if (itemId === "autofocus") return "Autofocus"
             if (itemId === "timecode") return "Timecode"
+            if (itemId === "clipNames") return "Clip Names"
         }
         if (section === "Audio") {
             if (itemId === "audioOptions") return "Audio"
@@ -2010,7 +2014,24 @@ Item {
         root.presetNamePopupOpen = true
     }
 
+    function openClipTextPopup(current) {
+        root.presetNameDraft = current || ""
+        root.presetKeyboardShift = false
+        root.presetKeyboardCapsLock = false
+        root.presetKeyboardLongPressHandled = false
+        root.presetKeyboardMode = "letters"
+        root.presetPopupPurpose = "clipText"
+        root.presetNamePopupOpen = true
+    }
+
+    function recordItemVisible(itemId) {
+        if (itemId === "clipNames")
+            return typeof apertarControlBridge !== "undefined" && !!apertarControlBridge && apertarControlBridge.clipNameKnown
+        return true
+    }
+
     function closePresetNamePopup() {
+        root.presetPopupPurpose = "preset"
         root.presetNameDraft = ""
         root.presetKeyboardShift = false
         root.presetKeyboardCapsLock = false
@@ -2020,6 +2041,13 @@ Item {
     }
 
     function savePresetFromDraft() {
+        if (root.presetPopupPurpose === "clipText") {
+            var clipText = root.presetNameDraft.trim()
+            root.closePresetNamePopup()
+            root.clipTextEntered(clipText)
+            return
+        }
+
         if (!root.settingsState)
             return
 
@@ -2119,6 +2147,9 @@ Item {
         }
 
         var text = key === "space" ? " " : key
+        if (root.presetPopupPurpose === "clipText"
+                && (!/^[A-Za-z0-9._-]$/.test(text) || root.presetNameDraft.length >= 24))
+            return
         if ((root.presetKeyboardShift || root.presetKeyboardCapsLock) && text.length === 1 && text >= "a" && text <= "z")
             text = text.toUpperCase()
 
@@ -2353,6 +2384,7 @@ Item {
         if (itemId === "gyroData") return recordGyroComponent
         if (itemId === "autofocus") return recordAutofocusComponent
         if (itemId === "timecode") return recordTimecodeComponent
+        if (itemId === "clipNames") return recordClipNamesComponent
         return null
     }
 
@@ -3971,6 +4003,30 @@ Item {
                 onValueSelected: function(v) {
                     if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
                         apertarControlBridge.applyTimecodeMode(v, "files")
+                }
+            }
+        }
+    }
+
+    Component {
+        id: recordClipNamesComponent
+
+        SystemSectionCard {
+            property string reorderSectionName: "Record"
+            title: "Clip Names"
+            titleIconSource: "qrc:/qml/icons/film.png"
+            description: "How clip folders and files are named"
+            onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
+
+            ClipNameCard {
+                id: clipNameCard
+                width: parent.width
+                bridge: (typeof apertarControlBridge !== "undefined") ? apertarControlBridge : null
+                onTextRequested: function(current) { root.openClipTextPopup(current) }
+
+                Connections {
+                    target: root
+                    function onClipTextEntered(text) { clipNameCard.acceptText(text) }
                 }
             }
         }
@@ -7313,6 +7369,7 @@ Item {
 
                             Loader {
                                 width: recordColumn.width
+                                visible: root.recordItemVisible(modelData)
                                 sourceComponent: root.recordComponentForId(modelData)
                             }
                         }
@@ -8073,7 +8130,7 @@ Item {
                 spacing: 4
 
                 Text {
-                    text: "Save Current Preset"
+                    text: root.presetPopupPurpose === "clipText" ? "Clip Name Text" : "Save Current Preset"
                     color: "white"
                     font.family: interBold.font.family
                     font.pixelSize: root.settingsKeyboardTitleSize
@@ -8081,7 +8138,9 @@ Item {
                 }
 
                 Text {
-                    text: "Save the current camera setup as a preset for quick recall or export."
+                    text: root.presetPopupPurpose === "clipText"
+                          ? "Letters, digits, dot, dash and underscore, up to 24 characters."
+                          : "Save the current camera setup as a preset for quick recall or export."
                     color: "#8f9096"
                     font.family: interRegular.font.family
                     font.pixelSize: root.settingsKeyboardHintSize
@@ -8096,7 +8155,7 @@ Item {
                 spacing: 8
 
                 Text {
-                    text: "Preset Name"
+                    text: root.presetPopupPurpose === "clipText" ? "Text" : "Preset Name"
                     color: "#66ffffff"
                     font.family: interMedium.font.family
                     font.pixelSize: root.settingsKeyboardLabelSize
@@ -8110,7 +8169,7 @@ Item {
                     width: parent.width
                     height: root.settingsKeyboardFieldHeight
                     text: root.presetNameDraft
-                    placeholderText: "Preset Name"
+                    placeholderText: root.presetPopupPurpose === "clipText" ? "Text" : "Preset Name"
                     placeholderTextColor: "#5e636b"
                     color: "white"
                     font.family: interMedium.font.family

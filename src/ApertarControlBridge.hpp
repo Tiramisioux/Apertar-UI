@@ -69,6 +69,10 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(int bufferStopPercent READ bufferStopPercent NOTIFY bufferStopPercentChanged)
     Q_PROPERTY(QString bufferSetting READ bufferSetting NOTIFY bufferSettingChanged)
     Q_PROPERTY(QString bufferNote READ bufferNote NOTIFY bufferNoteChanged)
+    Q_PROPERTY(QString clipNameTemplate READ clipNameTemplate NOTIFY clipNameChanged)
+    Q_PROPERTY(QString clipNameExample READ clipNameExample NOTIFY clipNameChanged)
+    Q_PROPERTY(QString clipNamePreview READ clipNamePreview NOTIFY clipNamePreviewChanged)
+    Q_PROPERTY(bool clipNameKnown READ clipNameKnown NOTIFY clipNameChanged)
     Q_PROPERTY(bool cdngLogActive READ cdngLogActive NOTIFY cdngLogChanged)
     Q_PROPERTY(int cdngLogBits READ cdngLogBits NOTIFY cdngLogChanged)
     Q_PROPERTY(bool cdngLogOn READ cdngLogOn NOTIFY cdngLogChanged)
@@ -145,6 +149,10 @@ public:
     int bufferStopPercent() const { return m_bufferStopPercent; }
     QString bufferSetting() const { return m_bufferSetting; }
     QString bufferNote() const { return m_bufferNote; }
+    QString clipNameTemplate() const { return m_clipNameTemplate; }
+    QString clipNameExample() const { return m_clipNameExample; }
+    QString clipNamePreview() const { return m_clipNamePreview; }
+    bool clipNameKnown() const { return m_clipNameKnown; }
     bool cdngLogActive() const { return m_cdngLogActive; }
     int cdngLogBits() const { return m_cdngLogBits; }
     bool cdngLogOn() const { return m_cdngLogOn; }
@@ -184,6 +192,8 @@ public:
     Q_INVOKABLE void applyBufferMode(const QString &value);
     Q_INVOKABLE void applyStoragePreroll();
     Q_INVOKABLE void applyStoragePrerollAuto(bool on);
+    Q_INVOKABLE void applyClipNameTemplate(const QString &value);
+    Q_INVOKABLE void requestClipNamePreview(const QString &value);
     Q_INVOKABLE bool applyClearHdr(bool enabled);
     Q_INVOKABLE void applyCdngLog(bool on);
     Q_INVOKABLE bool applyH264Resolution(const QString &displayValue);
@@ -248,6 +258,8 @@ signals:
     void bufferSettingChanged();
     void bufferNoteChanged();
     void cdngLogChanged();
+    void clipNameChanged();
+    void clipNamePreviewChanged();
     void controlsStatusChanged();
     void standbyChanged();
     // Core's media watcher state, from the "media" event and get_state.
@@ -284,6 +296,7 @@ private:
                          QJsonObject *replyObject = nullptr);
     void applyCoreMessage(const QJsonObject &message);
     void applyCoreState(const QJsonObject &state);
+    void applyClipNameState(const QJsonObject &state);
     void ensureEventSocketConnected();
     void processEventSocketMessages();
     void applyShutterFromMicroseconds(double shutterUs, double fps);
@@ -411,6 +424,11 @@ private:
     bool m_cdngLogApplied = true; // a missing cdng_log_applied (older Core) counts as applied
     bool m_cdngLogActive = false;
     bool m_cdngLogOn = false;
+    // Clip naming (Core: clip_name_template, clip_name_example); known only once Core has sent the template (older Core never does).
+    QString m_clipNameTemplate;
+    QString m_clipNameExample;
+    QString m_clipNamePreview; // reply of the last preview_clip_name; empty until asked
+    bool m_clipNameKnown = false;
     bool m_fpsSpeedRamp = false; // Core's fps_speed_ramp (T31): FPS may change during a raw take
     bool m_soundRecording = false; // a sound-only take: recording, but not the camera
     bool m_fpsSpeedRampKeepExposure = false;
