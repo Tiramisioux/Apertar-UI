@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QSocketNotifier>
 #include <QString>
@@ -31,6 +32,8 @@ public:
     Q_INVOKABLE void disconnectFromCore();
 
     std::optional<PreviewFrameInfo> currentPreviewFrame() const;
+    // While a take runs, APERTAR_UI_PREVIEW_RECORDING_FPS caps the preview frames handed to the renderer.
+    void setRecording(bool recording);
     int duplicateProducerFd(int procid, int fd) const;
 
 signals:
@@ -89,4 +92,8 @@ private:
     std::unordered_map<unsigned int, RegisteredPreviewBuffer> m_registeredPreviewBuffers;
     bool m_loggedPreviewBuffer = false;
     bool m_loggedPreviewFrame = false;
+    bool m_recording = false;
+    int m_recordingFpsCap = -1;     // APERTAR_UI_PREVIEW_RECORDING_FPS; -1 = unset (no cap)
+    QElapsedTimer m_throttleClock;
+    qint64 m_nextShownNs = -1;
 };

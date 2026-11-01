@@ -348,6 +348,8 @@ int main(int argc, char *argv[])
             apertarPreviewBridge.connectToCore();
         }
     });
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::recordingChanged, &apertarPreviewBridge,
+                     [&]() { apertarPreviewBridge.setRecording(apertarControlBridge.recording()); });
 
     QQmlApplicationEngine engine;
     auto *cdngProvider = new CdngImageProvider(false, false, false);

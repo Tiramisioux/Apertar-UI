@@ -22,6 +22,24 @@ ApertarPreviewSocketClient::ApertarPreviewSocketClient(QObject *parent)
             });
 
     setStatusText(QStringLiteral("Apertar-Core preview socket disconnected"));
+
+    // A/B knob like Core's APERTAR_WEB_PREVIEW_RECORDING_FPS: N = at most N preview frames a second while a take
+    // runs, 0 = keep the last frame until the take ends. Unset = every frame, as before.
+    bool capSet = false;
+    const int cap = qEnvironmentVariableIntValue("APERTAR_UI_PREVIEW_RECORDING_FPS", &capSet);
+    if (capSet && cap >= 0) {
+        m_recordingFpsCap = cap;
+        m_throttleClock.start();
+        qInfo() << "Apertar preview: at most" << cap << "frames a second while recording (APERTAR_UI_PREVIEW_RECORDING_FPS)";
+    }
+}
+
+void ApertarPreviewSocketClient::setRecording(bool recording)
+{
+    if (m_recording == recording)
+        return;
+    m_recording = recording;
+    m_nextShownNs = -1;     // the first frame of a take is shown at once
 }
 
 ApertarPreviewSocketClient::~ApertarPreviewSocketClient()
@@ -465,6 +483,18 @@ void ApertarPreviewSocketClient::handlePreviewFrame(const QByteArray &message, Q
     if (!jsonIntegerValue(message, "frame_id", &frameId)) {
         closeAttachedFds();
         return;
+    }
+
+    // APERTAR_UI_PREVIEW_RECORDING_FPS: a frame over the cap is dropped here, before the renderer imports or draws it.
+    if (m_recording && m_recordingFpsCap >= 0) {
+        const qint64 nowNs = m_throttleClock.nsecsElapsed();
+        if (m_recordingFpsCap == 0 || (m_nextShownNs >= 0 && nowNs < m_nextShownNs)) {
+            closeAttachedFds();
+            return;
+        }
+        const qint64 periodNs = 1000000000LL / m_recordingFpsCap;
+        // Budget from the last due time, so a 25 fps source capped at 12 shows about every other frame.
+        m_nextShownNs = (m_nextShownNs < 0 || nowNs - m_nextShownNs > periodNs) ? nowNs + periodNs : m_nextShownNs + periodNs;
     }
 
     if (attachedFds.isEmpty()) {
