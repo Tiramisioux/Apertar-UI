@@ -153,7 +153,9 @@ Window {
                                              : "N/A"
     readonly property bool smpteEnabled: settingsBridge ? settingsBridge.smpteEnabled : false
     readonly property bool externalNoMedia: mediaBridge ? !mediaBridge.mediaMounted : true
-    readonly property bool externalActiveCapture: root.recordingActive || root.timelapseActive
+    // Buffer safety stop: Core may still report recording until the flush ends; the pill treats it as READY.
+    readonly property bool pillRecordingActive: root.recordingActive && !(!!apertarControlBridge && apertarControlBridge.bufferSafetyStop)
+    readonly property bool externalActiveCapture: root.pillRecordingActive || root.timelapseActive
     readonly property bool guidesEnabled: (!smpteEnabled && infoOverlayEnabled && overlayFeedEnabled && settingsBridge)
                                           ? settingsBridge.guidesEnabled
                                           : false
@@ -195,7 +197,7 @@ Window {
                                                                : (externalActiveCapture ? "#fb2c36" : apertarControlBridge && apertarControlBridge.mediaWritesPending && !apertarControlBridge.bufferSafetyStop ? "#ffd54a" : "#00c951")
     readonly property string externalStatusLabel: externalPreroll ? "PRE-ROLL"
                                                                   : externalNoMedia ? "NO MEDIA"
-                                                                  : (root.timelapseActive ? "TIMELAPSE" : (root.recordingActive ? "REC" : apertarControlBridge && apertarControlBridge.mediaWritesPending && !apertarControlBridge.bufferSafetyStop ? "WRITING" : "READY"))
+                                                                  : (root.timelapseActive ? "TIMELAPSE" : (root.pillRecordingActive ? "REC" : apertarControlBridge && apertarControlBridge.mediaWritesPending && !apertarControlBridge.bufferSafetyStop ? "WRITING" : "READY"))
     readonly property var topMonitorInfoItems: [
         { label: "FORMAT", value: root.formatInfoValue },
         { label: "FPS", value: root.fpsDisplayValue, cameraSet: !!apertarControlBridge && apertarControlBridge.storagePrerollActive },

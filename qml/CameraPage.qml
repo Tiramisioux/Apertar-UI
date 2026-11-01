@@ -573,6 +573,9 @@ Item {
     property bool captureModeMenuOpen: false
     readonly property bool stillExposureActive: root.controlBridge ? root.controlBridge.stillExposureActive : false
     readonly property bool mediaWritesPending: root.controlBridge ? root.controlBridge.mediaWritesPending : false
+    // Buffer safety stop: Core may still report recording=true while the buffer flushes. That is not a take:
+    // pill and record button show READY and a press means START (Core starts the take after the flush).
+    readonly property bool bufferFlushing: root.controlBridge ? root.controlBridge.bufferSafetyStop : false
     readonly property bool canSelectCaptureMode: !root.recording && !root.timelapseActive && !root.stillExposureActive
                                                  && !root.photoCaptureInProgress && !root.mediaWritesPending
                                                  && (!root.controlBridge || !root.controlBridge.standby)
@@ -2688,7 +2691,7 @@ Timer {
         anchors.top: parent.top
         anchors.leftMargin: 16
         anchors.topMargin: root.rectangularLayout ? (root.topControlsTopMargin + root.topStatHeight + 16) : 16
-        recording: root.recording
+        recording: root.recording && !root.bufferFlushing
         timelapse: root.timelapseActive
         mediaMounted: mediaBridge.mediaMounted
         backgroundOpacity: root.effectiveControlsOpacity
@@ -3941,9 +3944,9 @@ TextMetrics {
 
             RecordButton {
                 id: recordBtn
-                enabled: root.recording || root.timelapseActive || (!root.mediaWritesPending && !root.photoCaptureInProgress)
+                enabled: root.recording || root.timelapseActive || root.bufferFlushing || (!root.mediaWritesPending && !root.photoCaptureInProgress)
                 anchors.verticalCenter: parent.verticalCenter
-                recording: root.recording
+                recording: root.recording && !root.bufferFlushing
                 timelapse: root.timelapseActive
                 timelapseMode: root.photoTimelapseEnabled
                 photoMode: root.photoModeEnabled
@@ -3980,7 +3983,7 @@ TextMetrics {
                         return
                     }
 
-                    if (!root.recording) {
+                    if (!root.recording || root.bufferFlushing) {
                         if (!mediaBridge.mediaMounted) {
                             root.showNoMediaWarning(false)
                             return
