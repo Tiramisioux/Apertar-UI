@@ -47,8 +47,6 @@ private:
         EGLImageKHR image = EGL_NO_IMAGE_KHR;
         GLuint lumaTexture = 0;                     // APERTAR_PREVIEW_PEAKING=fast: the Y plane as R8
         EGLImageKHR lumaImage = EGL_NO_IMAGE_KHR;
-        const uint8_t *lumaMap = nullptr;           // APERTAR_PREVIEW_PEAKING=cpu: the Y plane mapped for reading
-        size_t lumaMapBytes = 0;
         int dupFd = -1;
         std::array<int, 3> dupFds = { -1, -1, -1 };
         int sourceProcId = -1;
@@ -73,7 +71,6 @@ private:
     void connectBridgeSignals(QObject *bridge);
     void ensureImported(const PreviewFrameInfo &frame);
     void cleanupImportedBuffers();
-    void updateCpuEdgeMask(uint64_t sequence);
     double previewDisplayAspect(const PreviewFrameInfo &frame) const;
     QRectF previewRectInPixels(const PreviewFrameInfo &frame) const;
     void renderProcessedPreview(const PreviewFrameInfo &frame, const QSize &size);
@@ -243,7 +240,6 @@ private:
     std::unordered_map<uint64_t, ImportedBuffer> m_importedBuffers;
     GLuint m_currentTexture = 0;
     GLuint m_currentLumaTexture = 0;
-    const ImportedBuffer *m_currentImported = nullptr;   // the EGL-imported buffer being shown, if any
     GLenum m_currentTextureTarget = GL_TEXTURE_EXTERNAL_OES;
     GLuint m_planarTextures[3] = { 0, 0, 0 };
     GLuint m_cpuFallbackTexture = 0;
@@ -281,15 +277,6 @@ private:
     bool m_directWindowRendering = false;
     bool m_forcePlanarFallback = false;
     bool m_fastPeaking = false;          // APERTAR_PREVIEW_PEAKING=fast
-    bool m_cpuPeaking = false;           // APERTAR_PREVIEW_PEAKING=cpu
-    GLuint m_edgeTexture = 0;            // cpu: the edge mask, source size, one byte per pixel
-    unsigned int m_edgeWidth = 0;
-    unsigned int m_edgeHeight = 0;
-    uint64_t m_edgeSequence = UINT64_MAX;
-    std::vector<uint8_t> m_edgeMask;
-    std::vector<uint8_t> m_edgeRowA;
-    std::vector<uint8_t> m_edgeRowB;
-    bool m_loggedEdgeMapFailure = false;
     bool m_loggedLumaImportFailure = false;
     bool m_forceCpuFallback = false;
     bool m_allowCpuFallback = false;
