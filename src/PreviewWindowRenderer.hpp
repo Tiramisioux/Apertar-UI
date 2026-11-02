@@ -23,7 +23,6 @@
 
 class QQuickWindow;
 class CameraPreviewItem;
-class DrmPreviewPlane;
 
 class PreviewWindowRenderer : public QObject
 {
@@ -78,7 +77,7 @@ private:
     double previewDisplayAspect(const PreviewFrameInfo &frame) const;
     QRectF previewRectInPixels(const PreviewFrameInfo &frame) const;
     void renderProcessedPreview(const PreviewFrameInfo &frame, const QSize &size);
-    void renderDirectToWindow(const PreviewFrameInfo &frame, const QRectF &rect, float winH, bool overlayOnly = false);
+    void renderDirectToWindow(const PreviewFrameInfo &frame, const QRectF &rect, float winH);
     void blitPreviewToWindow(const QRectF &rect, float winH);
     bool uploadPlanarYuvTexture(const PreviewFrameInfo &frame,
                                 int sourceFd,
@@ -151,7 +150,6 @@ private:
     };
 
     PreviewCacheState currentPreviewState(const PreviewFrameInfo &frame, const QSize &size) const;
-    bool showOnPlane(const PreviewFrameInfo &frame, const QRectF &rect, const PreviewCacheState &state);
     bool previewStateChanged(const PreviewCacheState &state) const;
 
     QPointer<CameraPreviewItem> m_item;
@@ -240,10 +238,6 @@ private:
     GLint m_lutPreviewSizePlanarLoc = -1;
     GLint m_lutPreviewColumnsPlanarLoc = -1;
 
-    GLint m_overlayOnlyLoc = -1;
-    GLint m_overlayOnly2DLoc = -1;
-    GLint m_overlayOnlyPlanarLoc = -1;
-
     QElapsedTimer m_shaderTimer;
 
     std::unordered_map<uint64_t, ImportedBuffer> m_importedBuffers;
@@ -308,10 +302,4 @@ private:
     bool m_loggedShaderPrograms = false;
     bool m_loggedEglImport = false;
     bool m_loggedRenderUnavailable = false;
-
-    // APERTAR_PREVIEW_PLANE=1: the picture is scanned out of the camera buffer by the DRM primary plane
-    // and the GPU draws only zebra / peaking marks.
-    std::unique_ptr<DrmPreviewPlane> m_plane;
-    bool m_planeAttached = false;
-    bool m_planeClaimTried = false;
 };
