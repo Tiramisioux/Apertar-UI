@@ -2,6 +2,7 @@
 
 #include "dngdecoder.h"
 #include "VideoPlayback.hpp"
+#include "ClipFrameFiles.hpp"
 
 #include <QByteArray>
 #include <QCollator>
@@ -499,7 +500,8 @@ void ClipListModel::scanClips()
             }
 
             const QDir clipDir(entry.absoluteFilePath());
-            QStringList frames = clipDir.entryList(dngNameFilters(), QDir::Files | QDir::NoSymLinks, QDir::Name);
+            // Flat, split (part_NNN/, Core's frames_per_folder) or partly merged: the same frames, in frame order.
+            QStringList frames = apertar::clipframes::dngFramesOfClip(clipDir, dngNameFilters(), QDir::Files | QDir::NoSymLinks);
             if (frames.isEmpty()) {
                 const QString movie = VideoPlayback::movieInClip(entry.absoluteFilePath());
                 if (!movie.isEmpty()) {
@@ -519,10 +521,6 @@ void ClipListModel::scanClips()
                 }
                 continue;
             }
-
-            std::sort(frames.begin(), frames.end(), [&collator](const QString &lhs, const QString &rhs) {
-                return collator.compare(lhs, rhs) < 0;
-            });
 
             ClipInfo clip;
             clip.name = entry.fileName();

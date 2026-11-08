@@ -2,6 +2,7 @@
 
 #include "SettingsBridge.hpp"
 #include "VideoPlayback.hpp"
+#include "ClipFrameFiles.hpp"
 
 #include <QByteArray>
 #include <QCollator>
@@ -693,12 +694,8 @@ void PlaybackController::reloadFrameList(const QString &clipPath)
     if (isSingleStill) {
         m_frameFiles.append(clipInfo.absoluteFilePath());
     } else {
-        QStringList frames = clipDir.entryList(dngNameFilters(), QDir::Files, QDir::Name);
-        QCollator collator;
-        collator.setNumericMode(true);
-        std::sort(frames.begin(), frames.end(), [&collator](const QString &lhs, const QString &rhs) {
-            return collator.compare(lhs, rhs) < 0;
-        });
+        // Flat, split (part_NNN/, Core's frames_per_folder) or partly merged: the same frames, in frame order.
+        const QStringList frames = apertar::clipframes::dngFramesOfClip(clipDir, dngNameFilters());
 
         m_frameFiles.reserve(frames.size());
         for (const QString &frameName : frames) {

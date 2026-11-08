@@ -22,6 +22,7 @@
 #include <tiffio.h>
 
 #include "dngdecoder.h"
+#include "ClipFrameFiles.hpp"
 #include "tiffhelper.h"
 
 namespace {
@@ -766,19 +767,13 @@ QStringList neighboringFramePaths(const QString &filePath, int limit)
     if (filePath.isEmpty() || limit <= 0)
         return {};
 
-    const QFileInfo currentInfo(filePath);
-    const QDir dir = currentInfo.dir();
-    QStringList frames = dir.entryList(dngNameFilters(), QDir::Files, QDir::Name);
+    // The whole clip, across part_NNN/ folders (Core's frames_per_folder), so the neighbours run on past a part's end.
+    const QDir dir = apertar::clipframes::clipDirForFrame(filePath);
+    const QStringList frames = apertar::clipframes::dngFramesOfClip(dir, dngNameFilters());
     if (frames.isEmpty())
         return {};
 
-    QCollator collator;
-    collator.setNumericMode(true);
-    std::sort(frames.begin(), frames.end(), [&collator](const QString &lhs, const QString &rhs) {
-        return collator.compare(lhs, rhs) < 0;
-    });
-
-    const int currentIndex = frames.indexOf(currentInfo.fileName());
+    const int currentIndex = frames.indexOf(dir.relativeFilePath(QFileInfo(filePath).absoluteFilePath()));
     if (currentIndex < 0)
         return {};
 
@@ -799,19 +794,13 @@ bool resolvePrefetchClip(const QString &filePath,
     if (filePath.isEmpty() || !clipKey || !frames || !currentIndex)
         return false;
 
-    const QFileInfo currentInfo(filePath);
-    const QDir dir = currentInfo.dir();
-    QStringList clipFrames = dir.entryList(dngNameFilters(), QDir::Files, QDir::Name);
+    // The whole clip, across part_NNN/ folders, so the prefetch key and the index are the clip's, not one part's.
+    const QDir dir = apertar::clipframes::clipDirForFrame(filePath);
+    QStringList clipFrames = apertar::clipframes::dngFramesOfClip(dir, dngNameFilters());
     if (clipFrames.isEmpty())
         return false;
 
-    QCollator collator;
-    collator.setNumericMode(true);
-    std::sort(clipFrames.begin(), clipFrames.end(), [&collator](const QString &lhs, const QString &rhs) {
-        return collator.compare(lhs, rhs) < 0;
-    });
-
-    const int index = clipFrames.indexOf(currentInfo.fileName());
+    const int index = clipFrames.indexOf(dir.relativeFilePath(QFileInfo(filePath).absoluteFilePath()));
     if (index < 0)
         return false;
 
