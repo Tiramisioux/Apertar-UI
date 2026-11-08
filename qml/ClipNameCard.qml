@@ -21,6 +21,7 @@ Item {
     readonly property int pillFontSize: largeLandscape ? 22 : (standardLandscape ? 16 : 14)
 
     readonly property var presetList: [
+        { label: "Standard", template: "{format}_{date}_{clip}_{tc}" },   // Core clipname::kStandardTemplate
         { label: "Original", template: "{format}_{date}_{clip}" },
         { label: "Time of day, dashes", template: "{format}_{date_}_{tc-}_{clip}" },
         { label: "Time of day, compact", template: "{format}_{date_}_{tc}_{clip}" }
