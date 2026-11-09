@@ -69,6 +69,11 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(QString storagePrerollLast READ storagePrerollLast NOTIFY storagePrerollLastChanged)
     Q_PROPERTY(int bufferStopPercent READ bufferStopPercent NOTIFY bufferStopPercentChanged)
     Q_PROPERTY(QString bufferSetting READ bufferSetting NOTIFY bufferSettingChanged)
+    Q_PROPERTY(int framesPerFolder READ framesPerFolder NOTIFY clipSplitChanged)
+    Q_PROPERTY(bool framesPerFolderEnv READ framesPerFolderEnv NOTIFY clipSplitChanged)
+    Q_PROPERTY(bool clipMergeKnown READ clipMergeKnown NOTIFY clipSplitChanged)
+    Q_PROPERTY(bool clipMergeEnabled READ clipMergeEnabled NOTIFY clipSplitChanged)
+    Q_PROPERTY(bool clipMergeEnvOff READ clipMergeEnvOff NOTIFY clipSplitChanged)
     Q_PROPERTY(QString bufferNote READ bufferNote NOTIFY bufferNoteChanged)
     Q_PROPERTY(QString clipNameTemplate READ clipNameTemplate NOTIFY clipNameChanged)
     Q_PROPERTY(QString clipNameExample READ clipNameExample NOTIFY clipNameChanged)
@@ -150,6 +155,11 @@ public:
     QString storagePrerollLast() const { return m_storagePrerollLast; }
     int bufferStopPercent() const { return m_bufferStopPercent; }
     QString bufferSetting() const { return m_bufferSetting; }
+    int framesPerFolder() const { return m_framesPerFolder; }
+    bool framesPerFolderEnv() const { return m_framesPerFolderEnv; }
+    bool clipMergeKnown() const { return m_clipMergeKnown; }
+    bool clipMergeEnabled() const { return m_clipMergeEnabled; }
+    bool clipMergeEnvOff() const { return m_clipMergeEnvOff; }
     QString bufferNote() const { return m_bufferNote; }
     QString clipNameTemplate() const { return m_clipNameTemplate; }
     QString clipNameExample() const { return m_clipNameExample; }
@@ -192,6 +202,8 @@ public:
     Q_INVOKABLE bool applyTuningFile(const QString &path);
     Q_INVOKABLE bool applyRawBitDepth(const QString &displayValue);
     Q_INVOKABLE void applyBufferMode(const QString &value);
+    Q_INVOKABLE void applyFramesPerFolder(int value);
+    Q_INVOKABLE void applyClipMerge(bool enabled);
     Q_INVOKABLE void applyStoragePreroll();
     Q_INVOKABLE void applyStoragePrerollAuto(bool on);
     Q_INVOKABLE void applyClipNameTemplate(const QString &value);
@@ -261,6 +273,7 @@ signals:
     void bufferNoteChanged();
     void cdngLogChanged();
     void clipNameChanged();
+    void clipSplitChanged();
     void clipNamePreviewChanged();
     void controlsStatusChanged();
     void standbyChanged();
@@ -420,6 +433,13 @@ private:
     bool m_bufferSafetyStop = false; // Core ended the take because the write buffer filled; true until drained
     int m_bufferStopPercent = 0;     // Core's buffer stop threshold in percent, 0 = off
     QString m_bufferSetting; // requested mode from Core's buffer_setting; empty = unknown (control hidden)
+    // Core's [storage] frames_per_folder (0 = one folder; -1 = unknown, row hidden) and clip_merge; *Env = set by the
+    // environment (APERTAR_CDNG_FRAMES_PER_FOLDER / APERTAR_CLIP_MERGE=0), so the tiles are locked.
+    int m_framesPerFolder = -1;
+    bool m_framesPerFolderEnv = false;
+    bool m_clipMergeKnown = false;
+    bool m_clipMergeEnabled = true;
+    bool m_clipMergeEnvOff = false;
     QString m_bufferNote; // Core's buffer_note: why ram was or was not used
     // CineMate Log (Core: cdng_log_bits, cdng_log_available, cdng_log_applied); active = available && bits > 0 && applied.
     int m_cdngLogBits = 0;

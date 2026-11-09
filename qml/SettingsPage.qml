@@ -5386,6 +5386,79 @@ Item {
                 actionEnabled: mediaBridge.mediaMounted
                 onClicked: root.openEjectConfirmation()
             }
+
+            // [storage] frames_per_folder: Off (0, one folder) or N frames per part_NNN folder; a value set in the config file
+            // and not in the list is offered too (the WebUI's Media card has the same choice).
+            InlineDropdownField {
+                width: parent.width
+                visible: !!apertarControlBridge && apertarControlBridge.framesPerFolder >= 0
+                label: apertarControlBridge && apertarControlBridge.framesPerFolderEnv
+                       ? "Split Long Takes (set by APERTAR_CDNG_FRAMES_PER_FOLDER)" : "Split Long Takes"
+                value: apertarControlBridge ? String(apertarControlBridge.framesPerFolder) : "0"
+                displayValue: value === "0" ? "Off" : value + " frames per folder"
+                options: {
+                    var list = [{ value: "0", label: "Off" }]
+                    var presets = [1000, 2000, 5000, 10000]
+                    var current = apertarControlBridge ? apertarControlBridge.framesPerFolder : 0
+                    if (current > 0 && presets.indexOf(current) < 0) {
+                        presets.push(current)
+                        presets.sort(function(a, b) { return a - b })
+                    }
+                    for (var i = 0; i < presets.length; ++i)
+                        list.push({ value: String(presets[i]), label: presets[i] + " frames per folder" })
+                    return list
+                }
+                fieldEnabled: !!apertarControlBridge && !apertarControlBridge.framesPerFolderEnv
+                popupParent: dropdownOverlay
+                dropdownController: sharedDropdownController
+                onValueSelected: function(v) { apertarControlBridge.applyFramesPerFolder(parseInt(v, 10)) }
+            }
+
+            // [storage] clip_merge: joins the part folders of split clips when the camera is idle.
+            Column {
+                width: parent.width
+                spacing: 8
+                visible: !!apertarControlBridge && apertarControlBridge.clipMergeKnown
+
+                Text {
+                    width: parent.width
+                    text: "Merge Split Clips"
+                    color: "white"
+                    font.pixelSize: 14
+                }
+
+                Row {
+                    width: parent.width
+                    spacing: 12
+
+                    ActionTile {
+                        width: (parent.width - 12) / 2
+                        label: "On"
+                        tone: apertarControlBridge.clipMergeEnabled ? "accent" : "default"
+                        actionEnabled: !apertarControlBridge.clipMergeEnvOff && !apertarControlBridge.clipMergeEnabled
+                        onClicked: apertarControlBridge.applyClipMerge(true)
+                    }
+
+                    ActionTile {
+                        width: (parent.width - 12) / 2
+                        label: "Off"
+                        tone: !apertarControlBridge.clipMergeEnabled ? "accent" : "default"
+                        actionEnabled: !apertarControlBridge.clipMergeEnvOff && apertarControlBridge.clipMergeEnabled
+                        onClicked: apertarControlBridge.applyClipMerge(false)
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    text: (apertarControlBridge.clipMergeEnvOff ? "Turned off by APERTAR_CLIP_MERGE \u00b7 " : "")
+                          + (apertarControlBridge.clipMergeEnabled
+                             ? "Joins the parts into one folder when the camera is idle; pauses when a take starts"
+                             : "Split clips stay in their part folders")
+                    color: "#9aa5b1"
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
+            }
         }
     }
 

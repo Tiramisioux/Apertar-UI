@@ -700,6 +700,38 @@ void ApertarControlBridge::applyBufferMode(const QString &value)
     }
 }
 
+void ApertarControlBridge::applyFramesPerFolder(int value)
+{
+    // Core takes 0 (one folder) or 100-100000; the tiles send 0 or 5000 (the SSD campaign's value).
+    if (value != 0 && (value < 100 || value > 100000)) {
+        setLastError(QStringLiteral("Invalid frames per folder."));
+        return;
+    }
+    if (!sendCoreCommand(QStringLiteral("set_frames_per_folder"), {
+            { QStringLiteral("value"), QString::number(value) }
+        })) {
+        return;
+    }
+    if (m_framesPerFolder != value) {
+        m_framesPerFolder = value;
+        emit clipSplitChanged();
+    }
+}
+
+void ApertarControlBridge::applyClipMerge(bool enabled)
+{
+    if (!sendCoreCommand(QStringLiteral("set_clip_merge"), {
+            { QStringLiteral("enabled"), enabled ? QStringLiteral("true") : QStringLiteral("false") }
+        })) {
+        return;
+    }
+    if (!m_clipMergeKnown || m_clipMergeEnabled != enabled) {
+        m_clipMergeKnown = true;
+        m_clipMergeEnabled = enabled;
+        emit clipSplitChanged();
+    }
+}
+
 bool ApertarControlBridge::applyClearHdr(bool enabled)
 {
     // Core restarts the camera, forces 4K and settles the bit depth; the settings event brings those back.
@@ -2764,6 +2796,44 @@ void ApertarControlBridge::applyBufferState(const QJsonObject &state)
             emit storagePrerollLastChanged();
         }
     }
+    // [storage] frames_per_folder and clip_merge (settingsBody / bufferMembers); scalars may come as strings (KB trap 7).
+    const auto flag = [](const QJsonValue &raw) {
+        const QString text = raw.toString().trimmed().toLower();
+        return raw.isString() ? (text == QStringLiteral("true") || text == QStringLiteral("1")) : raw.toBool(false);
+    };
+    bool splitChanged = false;
+    if (state.contains(QStringLiteral("frames_per_folder"))) {
+        const QJsonValue raw = state.value(QStringLiteral("frames_per_folder"));
+        const int perFolder = qMax(0, raw.isString() ? raw.toString().trimmed().toInt() : raw.toInt(0));
+        if (m_framesPerFolder != perFolder) {
+            m_framesPerFolder = perFolder;
+            splitChanged = true;
+        }
+    }
+    if (state.contains(QStringLiteral("frames_per_folder_env"))) {
+        const bool fromEnv = flag(state.value(QStringLiteral("frames_per_folder_env")));
+        if (m_framesPerFolderEnv != fromEnv) {
+            m_framesPerFolderEnv = fromEnv;
+            splitChanged = true;
+        }
+    }
+    if (state.contains(QStringLiteral("clip_merge_enabled"))) {
+        const bool on = flag(state.value(QStringLiteral("clip_merge_enabled")));
+        if (!m_clipMergeKnown || m_clipMergeEnabled != on) {
+            m_clipMergeKnown = true;
+            m_clipMergeEnabled = on;
+            splitChanged = true;
+        }
+    }
+    if (state.contains(QStringLiteral("clip_merge_env_off"))) {
+        const bool envOff = flag(state.value(QStringLiteral("clip_merge_env_off")));
+        if (m_clipMergeEnvOff != envOff) {
+            m_clipMergeEnvOff = envOff;
+            splitChanged = true;
+        }
+    }
+    if (splitChanged)
+        emit clipSplitChanged();
 }
 
 void ApertarControlBridge::applyCdngLogState(const QJsonObject &state)
