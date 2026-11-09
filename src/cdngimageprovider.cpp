@@ -712,15 +712,17 @@ const RawFrame &decodeReusableFrame(const QString &filePath)
     return scratchFrame;
 }
 
-QImage loadResolvedImage(const QString &filePath,
+QImage loadResolvedImage(const QString &listedPath,
                          const QSize &targetSize,
                          bool previewOnly,
                          int radius,
                          QString *decodeError = nullptr)
 {
-    if (filePath.isEmpty()) {
+    if (listedPath.isEmpty()) {
         return {};
     }
+    // A split clip's frame may have moved into the clip folder since the listing (Core's merge worker).
+    const QString filePath = apertar::clipframes::existingFramePath(listedPath);
 
     if (!isDngFile(filePath)) {
         QImage image = loadStandardImage(filePath, targetSize);
