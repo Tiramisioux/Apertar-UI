@@ -1374,6 +1374,10 @@ void ApertarControlBridge::applyCoreMessage(const QJsonObject &message)
         setAudioInputLevel(message.value(QStringLiteral("input_level")).toInt(0));
         return;
     }
+    if (event == QStringLiteral("clip_merge")) {
+        applyBufferState(message);   // the merge progress and clip_merge_enabled
+        return;
+    }
     if (event == QStringLiteral("buffer")) {
         applyBufferState(message);
         applyRecordingDroppedFrames(message);   // the count rides on the buffer event while a take runs
@@ -2834,6 +2838,34 @@ void ApertarControlBridge::applyBufferState(const QJsonObject &state)
     }
     if (splitChanged)
         emit clipSplitChanged();
+    // The merge progress; a field that is missing (an older Core, or a message without it) keeps its value.
+    bool progressChanged = false;
+    const auto number = [](const QJsonValue &raw) {
+        return int(qBound<qint64>(0, raw.isString() ? raw.toString().trimmed().toLongLong() : qint64(raw.toDouble(0.0)), qint64(2147483647)));
+    };
+    const auto takeInt = [&](const char *key, int &field) {
+        const QString k = QString::fromLatin1(key);
+        if (!state.contains(k)) return;
+        const int v = number(state.value(k));
+        if (field != v) { field = v; progressChanged = true; }
+    };
+    const auto takeText = [&](const char *key, QString &field) {
+        const QString k = QString::fromLatin1(key);
+        if (!state.contains(k)) return;
+        const QString v = state.value(k).toString();
+        if (field != v) { field = v; progressChanged = true; }
+    };
+    takeText("clip_merge_active", m_clipMergeActiveClip);
+    takeText("clip_merge_paused", m_clipMergePaused);
+    takeInt("clip_merge_pending", m_clipMergePending);
+    takeInt("clip_merge_clip_done", m_clipMergeClipDone);
+    takeInt("clip_merge_clip_total", m_clipMergeClipTotal);
+    takeInt("clip_merge_all_done", m_clipMergeAllDone);
+    takeInt("clip_merge_all_total", m_clipMergeAllTotal);
+    takeInt("clip_merge_all_clips", m_clipMergeAllClips);
+    takeInt("clip_merge_eta_s", m_clipMergeEtaS);
+    if (progressChanged)
+        emit clipMergeProgressChanged();
 }
 
 void ApertarControlBridge::applyCdngLogState(const QJsonObject &state)

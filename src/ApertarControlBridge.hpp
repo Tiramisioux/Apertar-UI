@@ -74,6 +74,15 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(bool clipMergeKnown READ clipMergeKnown NOTIFY clipSplitChanged)
     Q_PROPERTY(bool clipMergeEnabled READ clipMergeEnabled NOTIFY clipSplitChanged)
     Q_PROPERTY(bool clipMergeEnvOff READ clipMergeEnvOff NOTIFY clipSplitChanged)
+    Q_PROPERTY(QString clipMergeActiveClip READ clipMergeActiveClip NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(QString clipMergePaused READ clipMergePaused NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergePending READ clipMergePending NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeClipDone READ clipMergeClipDone NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeClipTotal READ clipMergeClipTotal NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeAllDone READ clipMergeAllDone NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeAllTotal READ clipMergeAllTotal NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeAllClips READ clipMergeAllClips NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeEtaS READ clipMergeEtaS NOTIFY clipMergeProgressChanged)
     Q_PROPERTY(QString bufferNote READ bufferNote NOTIFY bufferNoteChanged)
     Q_PROPERTY(QString clipNameTemplate READ clipNameTemplate NOTIFY clipNameChanged)
     Q_PROPERTY(QString clipNameExample READ clipNameExample NOTIFY clipNameChanged)
@@ -160,6 +169,15 @@ public:
     bool clipMergeKnown() const { return m_clipMergeKnown; }
     bool clipMergeEnabled() const { return m_clipMergeEnabled; }
     bool clipMergeEnvOff() const { return m_clipMergeEnvOff; }
+    QString clipMergeActiveClip() const { return m_clipMergeActiveClip; }
+    QString clipMergePaused() const { return m_clipMergePaused; }
+    int clipMergePending() const { return m_clipMergePending; }
+    int clipMergeClipDone() const { return m_clipMergeClipDone; }
+    int clipMergeClipTotal() const { return m_clipMergeClipTotal; }
+    int clipMergeAllDone() const { return m_clipMergeAllDone; }
+    int clipMergeAllTotal() const { return m_clipMergeAllTotal; }
+    int clipMergeAllClips() const { return m_clipMergeAllClips; }
+    int clipMergeEtaS() const { return m_clipMergeEtaS; }
     QString bufferNote() const { return m_bufferNote; }
     QString clipNameTemplate() const { return m_clipNameTemplate; }
     QString clipNameExample() const { return m_clipNameExample; }
@@ -274,6 +292,7 @@ signals:
     void cdngLogChanged();
     void clipNameChanged();
     void clipSplitChanged();
+    void clipMergeProgressChanged();
     void clipNamePreviewChanged();
     void controlsStatusChanged();
     void standbyChanged();
@@ -440,6 +459,16 @@ private:
     bool m_clipMergeKnown = false;
     bool m_clipMergeEnabled = true;
     bool m_clipMergeEnvOff = false;
+    // Core's merge progress (clip_merge_* in get_state and the clip_merge event; KB clip-merge-progress-plan.md).
+    QString m_clipMergeActiveClip;
+    QString m_clipMergePaused;
+    int m_clipMergePending = 0;
+    int m_clipMergeClipDone = 0;
+    int m_clipMergeClipTotal = 0;
+    int m_clipMergeAllDone = 0;
+    int m_clipMergeAllTotal = 0;
+    int m_clipMergeAllClips = 0;
+    int m_clipMergeEtaS = 0;
     QString m_bufferNote; // Core's buffer_note: why ram was or was not used
     // CineMate Log (Core: cdng_log_bits, cdng_log_available, cdng_log_applied); active = available && bits > 0 && applied.
     int m_cdngLogBits = 0;

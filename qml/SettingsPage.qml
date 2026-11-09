@@ -2397,6 +2397,13 @@ Item {
         return null
     }
 
+    // The merge's time left: "under a minute", "about 4 min", "about 1 h 20 min".
+    function clipMergeEtaText(seconds) {
+        if (seconds < 60) return "under a minute"
+        if (seconds < 5400) return "about " + Math.round(seconds / 60) + " min"
+        return "about " + Math.floor(seconds / 3600) + " h " + Math.round((seconds % 3600) / 60) + " min"
+    }
+
     function powerComponentForId(itemId) {
         if (itemId === "media") return systemMediaComponent
         if (itemId === "formatMedia") return systemFormatMediaComponent
@@ -5457,6 +5464,62 @@ Item {
                     color: "#9aa5b1"
                     font.pixelSize: 12
                     wrapMode: Text.WordWrap
+                }
+
+                Repeater {
+                    // Current clip, then all clips (KB clip-merge-progress-plan.md), in the merge grey.
+                    model: apertarControlBridge && apertarControlBridge.clipMergeEnabled && apertarControlBridge.clipMergeAllClips > 0
+                           && apertarControlBridge.clipMergeAllTotal > 0 ? 2 : 0
+
+                    Column {
+                        readonly property bool clipRow: index === 0
+                        readonly property int done: clipRow ? apertarControlBridge.clipMergeClipDone : apertarControlBridge.clipMergeAllDone
+                        readonly property int total: clipRow ? apertarControlBridge.clipMergeClipTotal : apertarControlBridge.clipMergeAllTotal
+                        readonly property int percent: total > 0 ? Math.min(100, Math.floor(100 * done / total)) : 0
+                        width: parent.width
+                        spacing: 4
+
+                        Text {
+                            width: parent.width
+                            text: clipRow
+                                  ? (apertarControlBridge.clipMergeActiveClip !== ""
+                                     ? apertarControlBridge.clipMergeActiveClip + " \u00b7 " + percent + " % (" + done + " / " + total + ")"
+                                     : "Waiting")
+                                  : (apertarControlBridge.clipMergeAllClips + (apertarControlBridge.clipMergeAllClips === 1 ? " clip" : " clips")
+                                     + " \u00b7 " + percent + " %"
+                                     + (apertarControlBridge.clipMergePaused !== ""
+                                        ? " \u00b7 paused (" + apertarControlBridge.clipMergePaused + ")"
+                                        : " \u00b7 " + root.clipMergeEtaText(apertarControlBridge.clipMergeEtaS) + " left"))
+                            color: "#d7d9de"
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 8
+                            radius: height / 2
+                            color: "#1a1a1a"
+                            border.width: 1
+                            border.color: "#1affffff"
+
+                            Rectangle {
+                                width: parent.width * (parent.parent.total > 0 ? Math.min(1, parent.parent.done / parent.parent.total) : 0)
+                                height: parent.height
+                                radius: parent.radius
+                                color: "#73ffffff"   // the READY pill's merge grey, a little stronger on the dark track
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    visible: !!apertarControlBridge && apertarControlBridge.clipMergeEnabled && apertarControlBridge.clipMergePending === 0
+                             && apertarControlBridge.clipMergeAllClips === 0
+                    text: "Nothing to merge"
+                    color: "#9aa5b1"
+                    font.pixelSize: 12
                 }
             }
         }

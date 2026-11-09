@@ -2706,6 +2706,11 @@ Timer {
                           && !!root.controlBridge && root.controlBridge.bufferMode !== "none"
         bufferDrain: !!root.controlBridge && root.controlBridge.bufferSafetyStop
         storagePreroll: !!root.controlBridge && root.controlBridge.storagePrerollActive
+        // The clip merge (all clips): a faint grey fill in the READY pill while the camera is idle and the merge runs
+        // (on, a clip waits, not paused by a take, standby, a sound recording ...).
+        mergeProgress: !!root.controlBridge && root.controlBridge.clipMergeEnabled && root.controlBridge.clipMergeAllClips > 0
+                       && root.controlBridge.clipMergeAllTotal > 0 && root.controlBridge.clipMergePaused === ""
+                       ? root.controlBridge.clipMergeAllDone / root.controlBridge.clipMergeAllTotal : -1
         }
 
         ControlsWarning {

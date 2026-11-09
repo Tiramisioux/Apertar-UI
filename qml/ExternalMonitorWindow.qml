@@ -1136,6 +1136,33 @@ Window {
                     }
                 }
 
+                // Clip merge (all clips): a faint grey fill in the READY pill, as StatusChip on the camera page.
+                Item {
+                    readonly property real progress: !!apertarControlBridge && apertarControlBridge.clipMergeEnabled
+                                                     && apertarControlBridge.clipMergeAllClips > 0 && apertarControlBridge.clipMergeAllTotal > 0
+                                                     && apertarControlBridge.clipMergePaused === ""
+                                                     ? apertarControlBridge.clipMergeAllDone / apertarControlBridge.clipMergeAllTotal : -1
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.margins: externalStatusPill.border.width
+                    width: Math.max(0, (externalStatusPill.width - 2 * externalStatusPill.border.width) * Math.min(1, progress))
+                    clip: true
+                    visible: progress >= 0 && root.externalStatusLabel === "READY" && !externalStatusPill.drainOnly
+
+                    Behavior on width {
+                        NumberAnimation { duration: 400 }
+                    }
+
+                    Rectangle {
+                        width: externalStatusPill.width - 2 * externalStatusPill.border.width
+                        height: externalStatusPill.height - 2 * externalStatusPill.border.width
+                        radius: Math.max(0, externalStatusPill.radius - externalStatusPill.border.width)
+                        color: "#ffffff"
+                        opacity: 0.18
+                    }
+                }
+
                 Row {
                     id: statusRow
                     anchors.centerIn: parent

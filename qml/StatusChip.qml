@@ -20,6 +20,7 @@ Rectangle {
     property real bufferFill: 0.0
     property bool bufferBarVisible: false
     property bool bufferDrain: false // safety stop: pill is READY green, text hidden, bar green and emptying
+    property real mergeProgress: -1  // the clip merge, all clips, 0..1: a faint grey fill in the READY pill; below 0: none
 
     readonly property bool noMedia: !mediaMounted
     readonly property bool activeCapture: recording || timelapse
@@ -115,6 +116,30 @@ Rectangle {
             radius: Math.max(0, root.radius - root.border.width)
             color: root.drainOnly ? "#00c951" : "#fb2c36"
             opacity: 0.85
+        }
+    }
+
+    // Clip merge: a faint grey fill from the left in the READY pill (KB clip-merge-progress-plan.md), the same
+    // cropped shape as the buffer bar. Gone when nothing waits: the card can come out.
+    Item {
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.margins: root.border.width
+        width: Math.max(0, (root.width - 2 * root.border.width) * Math.min(1, root.mergeProgress))
+        clip: true
+        visible: root.mergeProgress >= 0 && root.chipLabel === "READY" && !root.drainOnly
+
+        Behavior on width {
+            NumberAnimation { duration: 400 }
+        }
+
+        Rectangle {
+            width: root.width - 2 * root.border.width
+            height: root.height - 2 * root.border.width
+            radius: Math.max(0, root.radius - root.border.width)
+            color: "#ffffff"
+            opacity: 0.18
         }
     }
 
