@@ -1670,6 +1670,7 @@ void PreviewWindowRenderer::ensureImported(const PreviewFrameInfo &frame)
                 existing.captureHeight == frame.captureHeight;
 
             if (matchesFrame) {
+                it->second.lastUseTick = ++m_importUseTick;
                 m_currentTexture = existing.texture;
                 m_currentTextureTarget = GL_TEXTURE_EXTERNAL_OES;
                 m_currentTextureIsPlanar = false;
@@ -1804,6 +1805,31 @@ void PreviewWindowRenderer::ensureImported(const PreviewFrameInfo &frame)
         imported.stride = stride;
         imported.captureWidth = frame.captureWidth;
         imported.captureHeight = frame.captureHeight;
+        imported.lastUseTick = ++m_importUseTick;
+
+        // Release the imports of buffers Core no longer sends. Each holds an EGLImage, a texture and dup()ed dmabuf fds;
+        // without this every camera reconfigure left the old pool behind (16 buffers x 3 fds) until the process ran out
+        // of fds and Mesa logged "Failed to export gem bo to dmabuf". A live buffer is seen every pool-size frames.
+        constexpr uint64_t kStaleImportTicks = 64;
+        for (auto staleIt = m_importedBuffers.begin(); staleIt != m_importedBuffers.end();) {
+            if (m_importUseTick - staleIt->second.lastUseTick <= kStaleImportTicks) {
+                ++staleIt;
+                continue;
+            }
+            auto destroyStaleImage = reinterpret_cast<PFNEGLDESTROYIMAGEKHRPROC>(eglGetProcAddress("eglDestroyImageKHR"));
+            const ImportedBuffer &old = staleIt->second;
+            if (old.texture)
+                glDeleteTextures(1, &old.texture);
+            if (old.image != EGL_NO_IMAGE_KHR && destroyStaleImage && dpy != EGL_NO_DISPLAY)
+                destroyStaleImage(dpy, old.image);
+            for (int fd : old.dupFds) {
+                if (fd >= 0)
+                    close(fd);
+            }
+            if (old.dupFd >= 0)
+                close(old.dupFd);
+            staleIt = m_importedBuffers.erase(staleIt);
+        }
 
         m_importedBuffers.emplace(frameBufferKey, imported);
         m_currentTexture = texture;
