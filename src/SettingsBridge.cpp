@@ -645,6 +645,29 @@ void SettingsBridge::reloadDualSensorSettings()
         m_recordCamerasSetting = normalizedMode;
         emit recordCamerasSettingChanged();
     }
+
+    // Wipe and stack (A5), written by Core through set_preview_source wipe/stack/opacity/direction.
+    const int wipe = std::clamp(m_settings.value(QStringLiteral("previewWipe"), 0).toInt(), 0, 100);
+    if (m_previewWipe != wipe) {
+        m_previewWipe = wipe;
+        emit previewWipeChanged();
+    }
+    const bool vertical = m_settings.value(QStringLiteral("previewWipeDirection"), QStringLiteral("Horizontal"))
+                              .toString().trimmed().compare(QStringLiteral("Vertical"), Qt::CaseInsensitive) == 0;
+    if (m_previewWipeVertical != vertical) {
+        m_previewWipeVertical = vertical;
+        emit previewWipeVerticalChanged();
+    }
+    const bool stack = m_settings.value(QStringLiteral("previewStack"), false).toBool();
+    if (m_previewStack != stack) {
+        m_previewStack = stack;
+        emit previewStackChanged();
+    }
+    const int opacity = std::clamp(m_settings.value(QStringLiteral("previewOpacity"), 50).toInt(), 0, 100);
+    if (m_previewOpacity != opacity) {
+        m_previewOpacity = opacity;
+        emit previewOpacityChanged();
+    }
 }
 
 bool SettingsBridge::zebraEnabled() const
