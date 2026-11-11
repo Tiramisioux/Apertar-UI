@@ -28,6 +28,11 @@ class CameraPreviewItem : public QQuickItem
     Q_PROPERTY(QVariantMap exposureReference READ exposureReference WRITE setExposureReference NOTIFY exposureReferenceChanged)
     Q_PROPERTY(int displayRotation READ displayRotation WRITE setDisplayRotation NOTIFY displayRotationChanged)
     Q_PROPERTY(float previewAspectRatio READ previewAspectRatio WRITE setPreviewAspectRatio NOTIFY previewAspectRatioChanged)
+    // Wipe and stack (A5): the draw is cut away over the left / top fraction of the picture, and/or blended
+    // with this alpha over what the window already holds. The defaults (0, 0, 1) change nothing.
+    Q_PROPERTY(qreal clipLeftFraction READ clipLeftFraction WRITE setClipLeftFraction NOTIFY clipLeftFractionChanged)
+    Q_PROPERTY(qreal clipTopFraction READ clipTopFraction WRITE setClipTopFraction NOTIFY clipTopFractionChanged)
+    Q_PROPERTY(qreal drawOpacity READ drawOpacity WRITE setDrawOpacity NOTIFY drawOpacityChanged)
 
 public:
     explicit CameraPreviewItem(QQuickItem *parent = nullptr);
@@ -89,6 +94,13 @@ public:
     float previewAspectRatio() const { return m_previewAspectRatio; }
     void setPreviewAspectRatio(float value);
 
+    qreal clipLeftFraction() const { return m_clipLeftFraction; }
+    void setClipLeftFraction(qreal value);
+    qreal clipTopFraction() const { return m_clipTopFraction; }
+    void setClipTopFraction(qreal value);
+    qreal drawOpacity() const { return m_drawOpacity; }
+    void setDrawOpacity(qreal value);
+
 signals:
     void bridgeChanged();
     void geometryChangedSignal();
@@ -118,6 +130,9 @@ signals:
     void exposureReferenceChanged();
     void displayRotationChanged();
     void previewAspectRatioChanged();
+    void clipLeftFractionChanged();
+    void clipTopFractionChanged();
+    void drawOpacityChanged();
 
 protected:
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
@@ -150,5 +165,8 @@ private:
     QVariantMap m_exposureReference;
     int m_displayRotation = 0;
     float m_previewAspectRatio = 0.0f;
+    qreal m_clipLeftFraction = 0.0;
+    qreal m_clipTopFraction = 0.0;
+    qreal m_drawOpacity = 1.0;
 
 };

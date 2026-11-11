@@ -143,6 +143,9 @@ private:
         QVariantMap exposureReference;
         int displayRotation = 0;
         float previewAspectRatio = 0.0f;
+        float clipLeftFraction = 0.0f;
+        float clipTopFraction = 0.0f;
+        float drawOpacity = 1.0f;
     };
 
     PreviewCacheState currentPreviewState(const PreviewFrameInfo &frame, const QSize &size) const;
