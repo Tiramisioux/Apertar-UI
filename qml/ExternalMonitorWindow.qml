@@ -325,7 +325,7 @@ Window {
             if (apertarControlBridge.standby)
                 apertarPreviewBridge.disconnectFromCore()
             else
-                apertarPreviewBridge.connectToCore()
+                apertarPreviewBridge.connectToCore("/tmp/apertar-core.sock")
         }
     }
 

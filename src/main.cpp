@@ -225,7 +225,7 @@ int runMonitorOnly(QGuiApplication &app)
                          QTimer::singleShot(0, window, syncVisibility);
                      });
 
-    apertarPreviewBridge.connectToCore();
+    apertarPreviewBridge.connectToCore(QStringLiteral("/tmp/apertar-core.sock"));
     syncVisibility();
     qInfo().noquote()
         << QStringLiteral("Apertar compositor-free monitor process: screen=%1 geometry=%2x%3")
@@ -345,7 +345,7 @@ int main(int argc, char *argv[])
             audioMeterBridge.suspendMonitoring();
             apertarPreviewBridge.disconnectFromCore();
         } else {
-            apertarPreviewBridge.connectToCore();
+            apertarPreviewBridge.connectToCore(QStringLiteral("/tmp/apertar-core.sock"));
         }
     });
     QObject::connect(&apertarControlBridge, &ApertarControlBridge::recordingChanged, &apertarPreviewBridge,
