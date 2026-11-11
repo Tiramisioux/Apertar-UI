@@ -635,6 +635,16 @@ void SettingsBridge::reloadDualSensorSettings()
         m_cam1Settings = tiesText;
         emit cam1SettingsChanged();
     }
+
+    static const QStringList kShootingModes = {
+        QStringLiteral("Both"), QStringLiteral("Cam 0"), QStringLiteral("Cam 1"), QStringLiteral("Follow preview")
+    };
+    const QString mode = m_settings.value(QStringLiteral("recordCameras"), QStringLiteral("Both")).toString().trimmed();
+    const QString normalizedMode = kShootingModes.contains(mode) ? mode : QStringLiteral("Both");
+    if (m_recordCamerasSetting != normalizedMode) {
+        m_recordCamerasSetting = normalizedMode;
+        emit recordCamerasSettingChanged();
+    }
 }
 
 bool SettingsBridge::zebraEnabled() const

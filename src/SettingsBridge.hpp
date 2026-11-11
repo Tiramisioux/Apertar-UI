@@ -49,6 +49,8 @@ class SettingsBridge : public QObject
     // Dual sensor, written by the primary and read here (T66): HDMI 0's view, and cam1's ties.
     Q_PROPERTY(QString previewSource READ previewSource NOTIFY previewSourceChanged)
     Q_PROPERTY(QString cam1Settings READ cam1Settings NOTIFY cam1SettingsChanged)
+    // The shooting mode (UI.conf recordCameras): Both, Cam 0, Cam 1 or Follow preview.
+    Q_PROPERTY(QString recordCamerasSetting READ recordCamerasSetting NOTIFY recordCamerasSettingChanged)
     Q_PROPERTY(QString externalMonitorInfoOverlay READ externalMonitorInfoOverlay WRITE setExternalMonitorInfoOverlay NOTIFY externalMonitorInfoOverlayChanged)
     Q_PROPERTY(QString externalMonitorOrientation READ externalMonitorOrientation WRITE setExternalMonitorOrientation NOTIFY externalMonitorOrientationChanged)
     Q_PROPERTY(bool dateTimeOverlayEnabled READ dateTimeOverlayEnabled WRITE setDateTimeOverlayEnabled NOTIFY dateTimeOverlayEnabledChanged)
@@ -192,6 +194,7 @@ public:
     QString externalMonitorMode() const;
     QString previewSource() const { return m_previewSource; }
     QString cam1Settings() const { return m_cam1Settings; }
+    QString recordCamerasSetting() const { return m_recordCamerasSetting; }
     void setExternalMonitorMode(const QString &value);
 
     QString externalMonitorInfoOverlay() const;
@@ -370,6 +373,7 @@ signals:
     void externalMonitorModeChanged();
     void previewSourceChanged();
     void cam1SettingsChanged();
+    void recordCamerasSettingChanged();
     void externalMonitorInfoOverlayChanged();
     void externalMonitorOrientationChanged();
     void dateTimeOverlayEnabledChanged();
@@ -486,6 +490,7 @@ private:
     QString m_externalMonitorMode = "Clean Feed";
     QString m_previewSource = QStringLiteral("Both");
     QString m_cam1Settings = QStringLiteral("unison");
+    QString m_recordCamerasSetting = QStringLiteral("Both");
     QString m_externalMonitorInfoOverlay = "On";
     QString m_externalMonitorOrientation = "Landscape";
     bool m_dateTimeOverlayEnabled = false;

@@ -486,6 +486,62 @@ Window {
                                             ? root.secondPaneHeight : root.secondPaneWidth / root.secondDisplayAspect
     readonly property real secondFitX: root.secondPaneX + Math.round((root.secondPaneWidth - root.secondFitWidth) / 2)
     readonly property real secondFitY: root.secondPaneY + Math.round((root.secondPaneHeight - root.secondFitHeight) / 2)
+    // ---- The CAM1 pill and the status pill's readouts (T66, section 5.2) ----
+    readonly property string cam1StateValue: root.cam1Present ? String(apertarControlBridge.cam1State) : ""
+    readonly property bool cam1Down: ["not_found", "offline", "refused", "lost", "standby"].indexOf(root.cam1StateValue) >= 0
+    readonly property bool cam1ReadyToRecord: root.cam1StateValue === "ready" || root.cam1StateValue === "recording"
+    // The shooting mode (UI.conf recordCameras). What it asks for, before the system drops a camera.
+    readonly property string shootingMode: settingsBridge && settingsBridge.recordCamerasSetting ? settingsBridge.recordCamerasSetting : "Both"
+    readonly property bool previewWantsCam1: ["Both", "Both (Cam 1 left)", "Cam 1", "PiP Cam 1"].indexOf(root.requestedSource) >= 0
+    readonly property bool policyWantsCam1: root.cam1Present && !root.photoRule
+                                            && (root.shootingMode === "Both" || root.shootingMode === "Cam 1"
+                                                || (root.shootingMode === "Follow preview" && root.previewWantsCam1))
+    // cam1 was asked for, a take runs, and cam1 is not in it: the pill blinks.
+    readonly property bool cam1DroppedInTake: root.policyWantsCam1 && root.externalActiveCapture && !root.cam1InTake
+    readonly property bool cam1NotSynced: root.pillRecordingActive && root.cam0InTake && root.cam1InTake && !apertarControlBridge.cam1Locked
+    function cam1StateLabel(state) {
+        if (state === "not_found")
+            return "NOT FOUND"
+        if (state === "recording")
+            return "REC"
+        return String(state).toUpperCase()
+    }
+    readonly property string cam1PillLabel: root.cam1NotSynced ? "NOT SYNCED" : root.cam1StateLabel(root.cam1StateValue)
+    // red: in a take; amber: something is wrong; white: ready and in the next take; grey: ready, out of it.
+    readonly property string cam1PillTone: {
+        if (root.cam1Down || root.cam1NotSynced || root.cam1DroppedInTake
+                || root.cam1StateValue === "busy" || root.cam1StateValue === "writing")
+            return "amber"
+        if (root.cam1Recording || root.cam1StateValue === "recording")
+            return "red"
+        return root.cam1InTake ? "white" : "grey"
+    }
+    // What a press records, when it is not just what this window shows. text is appended to READY or REC.
+    readonly property var statusReadout: {
+        var none = { text: "", italic: false, amber: false }
+        var base = root.externalStatusLabel
+        if (!root.cam1Present || root.photoRule || (base !== "READY" && base !== "REC"))
+            return none
+        var rc = root.recordCamerasValue
+        // Frames came and stopped for a second: the press is refused (T69 checks it with a real cam1).
+        if (base === "READY" && root.cam1ReadyToRecord && root.cam1InTake && root.cam1FrameCount > 0 && !root.cam1Signal)
+            return { text: "CAM1 NO PICTURE", italic: false, amber: true }
+        // No frame since the client connected: the press still records cam1.
+        if (root.cam1ReadyToRecord && root.cam1InTake && root.cam1FrameCount === 0)
+            return { text: rc === "cam1" ? "CAM1 ONLY \u00b7 NO SIGNAL" : "BOTH \u00b7 CAM1 NO SIGNAL", italic: false, amber: true }
+        // The setting wants cam1 and the system dropped it: the system's choice, italic.
+        if (root.policyWantsCam1 && !root.cam1InTake && rc !== "none" && rc !== "")
+            return { text: "CAM0 ONLY \u00b7 CAM1 " + root.cam1StateLabel(root.cam1StateValue), italic: true, amber: false }
+        if (rc === "cam1")
+            return { text: "CAM1 ONLY", italic: false, amber: false }
+        if (rc === "cam0" && root.viewHasCam1)
+            return { text: "CAM0 ONLY", italic: false, amber: false }
+        return none
+    }
+    readonly property string externalStatusText: root.statusReadout.text.length > 0
+                                                 ? root.externalStatusLabel + " \u00b7 " + root.statusReadout.text
+                                                 : root.externalStatusLabel
+
     property int timecodeFrames: 0
     property string localTimecode: "00:00:00:00"
     readonly property string timecode: synchronizedCaptureStateAvailable
@@ -1427,6 +1483,7 @@ Window {
         }
 
             Column {
+            id: centerHud
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             spacing: 10
@@ -1645,8 +1702,10 @@ Window {
                     }
 
                     Text {
-                        text: root.externalStatusLabel
-                        color: "white"
+                        text: root.externalStatusText
+                        // Italic: the system chose it (a dropped cam1). Amber: cam1 has no signal or picture.
+                        font.italic: root.statusReadout.italic
+                        color: root.statusReadout.amber ? "#ffd54a" : "white"
                         font.family: interBold.font.family
                         font.pixelSize: 20
                         font.capitalization: Font.AllUppercase
@@ -1690,6 +1749,62 @@ Window {
                     styleColor: "#a0000000"
                     renderType: Text.NativeRendering
                 }
+            }
+        }
+
+        // CAM1 pill beside the status pill: cam1's state and drops, built like DroppedFrameWarning.
+        Rectangle {
+            id: cam1Pill
+            visible: root.cam1Present
+            x: centerHud.x + externalStatusPill.x + externalStatusPill.width + 12
+            y: centerHud.y + externalStatusPill.y + (externalStatusPill.height - height) / 2
+            height: 36
+            width: cam1PillRow.implicitWidth + 24
+            radius: height / 2
+            color: root.cam1PillTone === "red" ? "#80b71212"
+                   : root.cam1PillTone === "amber" ? "#e63b2a13"
+                   : root.cam1PillTone === "white" ? "#70000000" : "#50000000"
+            border.width: 1
+            border.color: root.cam1PillTone === "red" ? "#66ff6666"
+                          : root.cam1PillTone === "amber" ? "#bfaa7937"
+                          : root.cam1PillTone === "white" ? "#66ffffff" : "#26ffffff"
+            layer.enabled: visible
+            layer.smooth: true
+
+            Accessible.role: Accessible.StaticText
+            Accessible.name: "CAM1 " + root.cam1PillLabel
+
+            Row {
+                id: cam1PillRow
+                anchors.centerIn: parent
+                spacing: 8
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "CAM1 " + root.cam1PillLabel
+                    color: root.cam1PillTone === "amber" ? "#ffd27a"
+                           : root.cam1PillTone === "grey" ? "#8f9096" : "white"
+                    font.family: interBold.font.family
+                    font.pixelSize: 16
+                    font.letterSpacing: 1.4
+                    renderType: Text.NativeRendering
+                }
+
+                DroppedFrameWarning {
+                    anchors.verticalCenter: parent.verticalCenter
+                    height: 24
+                    visible: root.cam1Recording && apertarControlBridge.cam1RecordingDroppedFrames > 0
+                    count: apertarControlBridge.cam1RecordingDroppedFrames
+                }
+            }
+
+            // Blinks while a take that wants cam1 runs without it.
+            SequentialAnimation {
+                running: root.cam1DroppedInTake
+                loops: Animation.Infinite
+                alwaysRunToEnd: true
+                NumberAnimation { target: cam1Pill; property: "opacity"; to: 0.35; duration: 500 }
+                NumberAnimation { target: cam1Pill; property: "opacity"; to: 1.0; duration: 500 }
             }
         }
 
