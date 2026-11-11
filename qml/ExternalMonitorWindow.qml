@@ -1136,7 +1136,8 @@ Window {
                     }
                 }
 
-                // Clip merge (all clips): a faint grey fill in the READY pill, as StatusChip on the camera page.
+                // Clip merge (all clips): a faint grey fill in the READY pill that empties as the clips are merged,
+                // as StatusChip on the camera page.
                 Item {
                     readonly property real progress: !!apertarControlBridge && apertarControlBridge.clipMergeEnabled
                                                      && apertarControlBridge.clipMergeAllClips > 0 && apertarControlBridge.clipMergeAllTotal > 0
@@ -1146,7 +1147,7 @@ Window {
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
                     anchors.margins: externalStatusPill.border.width
-                    width: Math.max(0, (externalStatusPill.width - 2 * externalStatusPill.border.width) * Math.min(1, progress))
+                    width: Math.max(0, (externalStatusPill.width - 2 * externalStatusPill.border.width) * (1 - Math.min(1, progress)))
                     clip: true
                     visible: progress >= 0 && root.externalStatusLabel === "READY" && !externalStatusPill.drainOnly
 

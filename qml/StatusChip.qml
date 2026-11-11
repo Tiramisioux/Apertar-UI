@@ -120,13 +120,14 @@ Rectangle {
     }
 
     // Clip merge: a faint grey fill from the left in the READY pill (KB clip-merge-progress-plan.md), the same
-    // cropped shape as the buffer bar. Gone when nothing waits: the card can come out.
+    // cropped shape as the buffer bar. It is full when the merge starts and empties as the clips are merged: what
+    // is left to merge. Gone when nothing waits: the card can come out.
     Item {
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.margins: root.border.width
-        width: Math.max(0, (root.width - 2 * root.border.width) * Math.min(1, root.mergeProgress))
+        width: Math.max(0, (root.width - 2 * root.border.width) * (1 - Math.min(1, root.mergeProgress)))
         clip: true
         visible: root.mergeProgress >= 0 && root.chipLabel === "READY" && !root.drainOnly
 
