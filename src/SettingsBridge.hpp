@@ -46,6 +46,9 @@ class SettingsBridge : public QObject
     Q_PROPERTY(QString cameraControlsMode READ cameraControlsMode WRITE setCameraControlsMode NOTIFY cameraControlsModeChanged)
     Q_PROPERTY(bool externalMonitorEnabled READ externalMonitorEnabled WRITE setExternalMonitorEnabled NOTIFY externalMonitorEnabledChanged)
     Q_PROPERTY(QString externalMonitorMode READ externalMonitorMode WRITE setExternalMonitorMode NOTIFY externalMonitorModeChanged)
+    // Dual sensor, written by the primary and read here (T66): HDMI 0's view, and cam1's ties.
+    Q_PROPERTY(QString previewSource READ previewSource NOTIFY previewSourceChanged)
+    Q_PROPERTY(QString cam1Settings READ cam1Settings NOTIFY cam1SettingsChanged)
     Q_PROPERTY(QString externalMonitorInfoOverlay READ externalMonitorInfoOverlay WRITE setExternalMonitorInfoOverlay NOTIFY externalMonitorInfoOverlayChanged)
     Q_PROPERTY(QString externalMonitorOrientation READ externalMonitorOrientation WRITE setExternalMonitorOrientation NOTIFY externalMonitorOrientationChanged)
     Q_PROPERTY(bool dateTimeOverlayEnabled READ dateTimeOverlayEnabled WRITE setDateTimeOverlayEnabled NOTIFY dateTimeOverlayEnabledChanged)
@@ -187,6 +190,8 @@ public:
     void setExternalMonitorEnabled(bool value);
 
     QString externalMonitorMode() const;
+    QString previewSource() const { return m_previewSource; }
+    QString cam1Settings() const { return m_cam1Settings; }
     void setExternalMonitorMode(const QString &value);
 
     QString externalMonitorInfoOverlay() const;
@@ -363,6 +368,8 @@ signals:
     void cameraControlsModeChanged();
     void externalMonitorEnabledChanged();
     void externalMonitorModeChanged();
+    void previewSourceChanged();
+    void cam1SettingsChanged();
     void externalMonitorInfoOverlayChanged();
     void externalMonitorOrientationChanged();
     void dateTimeOverlayEnabledChanged();
@@ -428,6 +435,7 @@ private:
                         QString *errorMessage) const;
     void reloadPresetNames();
     void reloadValueSteps();
+    void reloadDualSensorSettings();
     void setPresetStatus(const QString &text, bool error);
     void pollExternalSettings();
     void updateSettingsFileState();
@@ -476,6 +484,8 @@ private:
     QString m_cameraControlsMode = "Light";
     bool m_externalMonitorEnabled = false;
     QString m_externalMonitorMode = "Clean Feed";
+    QString m_previewSource = QStringLiteral("Both");
+    QString m_cam1Settings = QStringLiteral("unison");
     QString m_externalMonitorInfoOverlay = "On";
     QString m_externalMonitorOrientation = "Landscape";
     bool m_dateTimeOverlayEnabled = false;
