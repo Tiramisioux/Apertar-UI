@@ -273,6 +273,24 @@ Window {
             return root.cam1Signal
         return root.viewSource === "Both (Cam 1 left)"
     }
+    // ---- Wipe and stack (A5) ----
+    // Only in a single Cam 0 / Cam 1 view with cam1 present. The shown camera (swapped says whether it is cam1)
+    // draws on top, on the second item; the other camera is full frame underneath, on the main item. Everything
+    // here reads viewSource alone, so a second window can reuse it.
+    readonly property int wipePercent: settingsBridge ? settingsBridge.previewWipe : 0
+    readonly property bool wipeStacked: settingsBridge ? settingsBridge.previewStack : false
+    readonly property bool wipeVertical: settingsBridge ? settingsBridge.previewWipeVertical : false
+    readonly property real wipeOpacity: settingsBridge ? settingsBridge.previewOpacity / 100.0 : 0.5
+    readonly property bool wipeActive: root.cam1Present && root.cam1Available
+                                       && root.layoutKind === "single"
+                                       && (root.wipePercent > 0 || root.wipeStacked)
+                                       && (root.viewSource === "Cam 0" || (root.viewSource === "Cam 1" && root.cam1Signal))
+    // Wipe is ignored while stacked.
+    readonly property real wipeEdge: (root.wipeActive && !root.wipeStacked) ? root.wipePercent / 100.0 : 0.0
+    // True when the main item (drawn first, underneath) holds cam1's bridge.
+    readonly property bool mainHoldsCam1: root.wipeActive ? !root.swapped : root.swapped
+    // What lies underneath has no signal: black, so the main item is hidden.
+    readonly property bool underneathMissing: root.wipeActive && root.mainHoldsCam1 && !root.cam1Signal
     readonly property bool cam1FallbackBanner: (root.viewSource === "Cam 1" || root.viewSource === "PiP Cam 1") && !root.cam1Signal
     // The pane that shows cam1 in a Both view, black with a NO SIGNAL line while cam1 sends nothing.
     readonly property bool cam1PaneMissing: root.layoutKind === "both" && !root.cam1Signal
@@ -808,28 +826,29 @@ Window {
             y: 0
             width: root.mainPaneWidth
             height: root.mainPaneHeight
-            visible: root.mainPaneVisible
-            bridge: (root.swapped && root.cam1Available) ? apertarPreviewBridge1 : apertarPreviewBridge
+            visible: root.wipeActive ? !root.underneathMissing : root.mainPaneVisible
+            bridge: (root.mainHoldsCam1 && root.cam1Available) ? apertarPreviewBridge1 : apertarPreviewBridge
             zoom: 1.0
             panX: 0.0
             panY: 0.0
-            zebraEnabled: root.overlayFeedEnabled && settingsBridge ? settingsBridge.zebraEnabled : false
+            zebraEnabled: root.overlayFeedEnabled && !root.wipeActive && settingsBridge ? settingsBridge.zebraEnabled : false
             zebraThreshold: settingsBridge ? settingsBridge.zebraThreshold : 0.70
-            focusPeakingEnabled: root.overlayFeedEnabled && settingsBridge ? settingsBridge.focusPeakingEnabled : false
+            focusPeakingEnabled: root.overlayFeedEnabled && !root.wipeActive && settingsBridge ? settingsBridge.focusPeakingEnabled : false
             focusPeakingThreshold: settingsBridge ? settingsBridge.focusPeakingThreshold : 0.04
             focusPeakingColor: settingsBridge ? settingsBridge.focusPeakingColor : "Red"
-            grayscaleEnabled: root.overlayFeedEnabled && settingsBridge ? settingsBridge.grayscaleEnabled : false
+            grayscaleEnabled: root.overlayFeedEnabled && !root.wipeActive && settingsBridge ? settingsBridge.grayscaleEnabled : false
             smpteEnabled: root.smpteEnabled
             anamorphicDesqueezeEnabled: settingsBridge ? settingsBridge.anamorphicDesqueezeEnabled : false
             anamorphicDesqueezeRatio: root.anamorphicRatioValue(settingsBridge ? settingsBridge.anamorphicRatio : "1.33x")
-            falseColorEnabled: root.overlayFeedEnabled && settingsBridge ? settingsBridge.falseColorEnabled : false
+            falseColorEnabled: root.overlayFeedEnabled && !root.wipeActive && settingsBridge ? settingsBridge.falseColorEnabled : false
             falseColorMode: settingsBridge ? settingsBridge.falseColorMode : 0
             lutPreviewEnabled: settingsBridge ? settingsBridge.lutPreviewEnabled : false
             lutPreviewFile: settingsBridge ? settingsBridge.lutPreviewFile : ""
             // The reference is cam0's; a cam1 main pane has none of its own yet.
-            exposureReference: apertarControlBridge && !root.swapped ? apertarControlBridge.previewExposureReference : ({})
+            exposureReference: apertarControlBridge && !root.swapped && !root.wipeActive ? apertarControlBridge.previewExposureReference : ({})
             displayRotation: root.externalMonitorRotation
-            previewAspectRatio: root.previewImageAspectRatio
+            // Underneath in a wipe, the main item holds the camera that is not shown.
+            previewAspectRatio: root.wipeActive ? root.secondImageAspect : root.previewImageAspectRatio
         }
 
         // The second pane (cam1, or cam0 when swapped): the right half of a Both view, or the inset in PiP.
@@ -839,23 +858,73 @@ Window {
         CameraPreviewItem {
             id: preview1
             objectName: "externalPreviewItem1"
-            bridge: root.cam1Available ? (root.swapped ? apertarPreviewBridge : apertarPreviewBridge1) : null
-            visible: root.cam1Available && root.secondPaneVisible
-            x: root.secondPaneX
-            y: root.secondPaneY
-            width: root.secondPaneWidth
-            height: root.secondPaneHeight
+            bridge: root.cam1Available ? (root.mainHoldsCam1 ? apertarPreviewBridge : apertarPreviewBridge1) : null
+            visible: root.cam1Available && (root.wipeActive || root.secondPaneVisible)
+            // A wipe or stack: the shown camera fills the surface; otherwise the second pane.
+            x: root.wipeActive ? 0 : root.secondPaneX
+            y: root.wipeActive ? 0 : root.secondPaneY
+            width: root.wipeActive ? root.mainPaneWidth : root.secondPaneWidth
+            height: root.wipeActive ? root.mainPaneHeight : root.secondPaneHeight
             z: 5
             zoom: 1.0
             panX: 0.0
             panY: 0.0
+            clipLeftFraction: (root.wipeActive && !root.wipeVertical) ? root.wipeEdge : 0.0
+            clipTopFraction: (root.wipeActive && root.wipeVertical) ? root.wipeEdge : 0.0
+            drawOpacity: (root.wipeActive && root.wipeStacked) ? root.wipeOpacity : 1.0
+            // The aids follow the shown camera. In a wipe that is this item, so they are bound here for
+            // that mode only (the main item turns them off above); otherwise this item has none.
+            zebraEnabled: root.wipeActive && root.overlayFeedEnabled && settingsBridge ? settingsBridge.zebraEnabled : false
+            zebraThreshold: settingsBridge ? settingsBridge.zebraThreshold : 0.70
+            focusPeakingEnabled: root.wipeActive && root.overlayFeedEnabled && settingsBridge ? settingsBridge.focusPeakingEnabled : false
+            focusPeakingThreshold: settingsBridge ? settingsBridge.focusPeakingThreshold : 0.04
+            focusPeakingColor: settingsBridge ? settingsBridge.focusPeakingColor : "Red"
+            grayscaleEnabled: root.wipeActive && root.overlayFeedEnabled && settingsBridge ? settingsBridge.grayscaleEnabled : false
+            falseColorEnabled: root.wipeActive && root.overlayFeedEnabled && settingsBridge ? settingsBridge.falseColorEnabled : false
+            falseColorMode: settingsBridge ? settingsBridge.falseColorMode : 0
+            exposureReference: root.wipeActive && apertarControlBridge && !root.swapped ? apertarControlBridge.previewExposureReference : ({})
             smpteEnabled: root.smpteEnabled
             anamorphicDesqueezeEnabled: settingsBridge ? settingsBridge.anamorphicDesqueezeEnabled : false
             anamorphicDesqueezeRatio: root.anamorphicRatioValue(settingsBridge ? settingsBridge.anamorphicRatio : "1.33x")
             lutPreviewEnabled: settingsBridge ? settingsBridge.lutPreviewEnabled : false
             lutPreviewFile: settingsBridge ? settingsBridge.lutPreviewFile : ""
             displayRotation: root.externalMonitorRotation
-            previewAspectRatio: root.secondImageAspect
+            previewAspectRatio: root.wipeActive ? root.previewImageAspectRatio : root.secondImageAspect
+        }
+
+        // The wipe edge: a 2 px white line at the wipe position of the shown picture, while it is neither
+        // 0 nor 100 and the cameras are not stacked. Horizontal wipes get a vertical line, vertical ones a horizontal line.
+        Rectangle {
+            visible: root.wipeActive && !root.wipeStacked && root.wipePercent > 0 && root.wipePercent < 100
+            x: root.wipeVertical ? root.mainFitX : root.mainFitX + root.mainFitWidth * root.wipeEdge - 1
+            y: root.wipeVertical ? root.mainFitY + root.mainFitHeight * root.wipeEdge - 1 : root.mainFitY
+            width: root.wipeVertical ? root.mainFitWidth : 2
+            height: root.wipeVertical ? 2 : root.mainFitHeight
+            color: "white"
+            z: 7
+        }
+
+        // Which camera lies underneath, while the effect is on.
+        Rectangle {
+            visible: root.wipeActive
+            x: 12
+            y: monitorSurface.height - height - 12
+            width: underTagText.implicitWidth + 20
+            height: underTagText.implicitHeight + 10
+            radius: 6
+            color: "#99000000"
+            z: 8
+
+            Text {
+                id: underTagText
+                anchors.centerIn: parent
+                text: root.mainHoldsCam1 ? "UNDER: CAM1" : "UNDER: CAM0"
+                color: "white"
+                font.family: interBold.font.family
+                font.pixelSize: 18
+                font.letterSpacing: 1.4
+                renderType: Text.NativeRendering
+            }
         }
 
         // The divider between the panes of a Both view.
