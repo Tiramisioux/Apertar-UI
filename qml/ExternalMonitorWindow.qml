@@ -71,6 +71,7 @@ Window {
     readonly property bool horizontalLevelEnabled: root.infoOverlayEnabled
                                                    && root.overlayFeedEnabled
                                                    && !root.smpteEnabled
+                                                   && root.layoutKind !== "both"
                                                    && settingsBridge
                                                    ? settingsBridge.horizontalLevelEnabled
                                                    : false
@@ -143,7 +144,9 @@ Window {
                                               : (root.recordingFormatValue
                                                  + (!root.photoModeEnabled && root.recordingFormatValue === "cDNG"
                                                     && !!apertarControlBridge && apertarControlBridge.cdngLogActive ? " · Log" : ""))
-    readonly property real previewImageAspectRatio: root.aspectRatioForResolution(root.previewAspectResolutionValue)
+    readonly property real cam0ImageAspect: root.aspectRatioForResolution(root.previewAspectResolutionValue)
+    // The main pane's picture (cam1's when the panes are swapped): the guides and the level follow it.
+    readonly property real previewImageAspectRatio: root.swapped ? root.cam1ImageAspect : root.cam0ImageAspect
     readonly property real previewDisplayAspectRatio: previewImageAspectRatio
                                                       * (settingsBridge && settingsBridge.anamorphicDesqueezeEnabled && !smpteEnabled
                                                          ? anamorphicRatioValue(settingsBridge.anamorphicRatio) : 1.0)
@@ -156,11 +159,13 @@ Window {
     // Buffer safety stop: Core may still report recording until the flush ends; the pill treats it as READY.
     readonly property bool pillRecordingActive: root.recordingActive && !(!!apertarControlBridge && apertarControlBridge.bufferSafetyStop)
     readonly property bool externalActiveCapture: root.pillRecordingActive || root.timelapseActive
-    readonly property bool guidesEnabled: (!smpteEnabled && infoOverlayEnabled && overlayFeedEnabled && settingsBridge)
+    readonly property bool guidesEnabled: (!smpteEnabled && infoOverlayEnabled && overlayFeedEnabled && settingsBridge
+                                           && root.layoutKind !== "both")
                                           ? settingsBridge.guidesEnabled
                                           : false
     readonly property string guideType: settingsBridge ? settingsBridge.guidesType : "Thirds"
-    readonly property bool centerMarkerEnabled: (!smpteEnabled && infoOverlayEnabled && overlayFeedEnabled && settingsBridge)
+    readonly property bool centerMarkerEnabled: (!smpteEnabled && infoOverlayEnabled && overlayFeedEnabled && settingsBridge
+                                                 && root.layoutKind !== "both")
                                                 ? settingsBridge.centerMarkerEnabled
                                                 : false
     readonly property string centerMarkerType: settingsBridge ? settingsBridge.centerMarkerType : "Circle/Dot"
@@ -205,6 +210,145 @@ Window {
         { label: "SHUTTER", value: root.shutterDisplayValue, cameraSet: !!apertarControlBridge && apertarControlBridge.shutterSetByCamera },
         { label: "WB", value: root.wbValue, cameraSet: !!apertarControlBridge && apertarControlBridge.whiteBalanceSetByCamera }
     ]
+
+    // ---- Dual sensor views (T66) ----
+    // The cam1 preview client exists only in the normal process; the monitor-only one shows cam0.
+    readonly property bool cam1Available: typeof apertarPreviewBridge1 !== "undefined" && apertarPreviewBridge1 !== null
+    readonly property bool cam1Test: typeof cam1InsetTest !== "undefined" && cam1InsetTest
+    readonly property bool cam1Present: !!apertarControlBridge && apertarControlBridge.cam1Present
+    readonly property bool cam1Wanted: cam1Available && (cam1Present || cam1Test)
+    // Photo mode and timelapse run on cam0 alone (P11): the cam1 sources then show cam0.
+    readonly property bool photoRule: root.photoModeEnabled || root.timelapseActive
+    // The view as HDMI 0's setting asks for it. Without cam1 it is Cam 0 as before; the test override
+    // (APERTAR_UI_CAM1_INSET) forces PiP Cam 0 when Core's state has no cam1.
+    readonly property string requestedSource: root.cam1Present
+                                              ? (settingsBridge && settingsBridge.previewSource ? settingsBridge.previewSource : "Both")
+                                              : (root.cam1Test ? "PiP Cam 0" : "Cam 0")
+    readonly property string viewSource: (root.photoRule || !root.cam1Available) ? "Cam 0" : root.requestedSource
+    readonly property bool viewHasCam1: root.viewSource !== "Cam 0"
+
+    // A pane has a signal while its client's framesReceived moved in the last second (polled every 500 ms).
+    property real cam1FrameCount: 0
+    property real cam1LastMovedMs: 0
+    property bool cam1SignalSeen: false
+    readonly property bool cam1Signal: root.cam1Wanted && root.cam1SignalSeen
+    function pollCam1Signal() {
+        if (!root.cam1Available) {
+            root.cam1SignalSeen = false
+            return
+        }
+        var count = apertarPreviewBridge1.framesReceived
+        var now = Date.now()
+        if (count !== root.cam1FrameCount) {
+            root.cam1FrameCount = count
+            root.cam1LastMovedMs = now
+        }
+        root.cam1SignalSeen = count > 0 && (now - root.cam1LastMovedMs) < 900
+    }
+
+    Timer {
+        interval: 500
+        repeat: true
+        running: root.cam1Wanted && !apertarControlBridge.standby
+        triggeredOnStart: true
+        onTriggered: root.pollCam1Signal()
+        onRunningChanged: {
+            if (!running)
+                root.cam1SignalSeen = false
+        }
+    }
+
+    // Layouts (§5.2). "both": two panes side by side; "pip": the second camera as an inset; "single".
+    // Cam 1 and PiP Cam 1 without a cam1 signal fall back to cam0 full screen (banner); PiP Cam 0 loses its inset.
+    readonly property string layoutKind: {
+        if (root.viewSource === "Both" || root.viewSource === "Both (Cam 1 left)")
+            return "both"
+        if (root.viewSource === "PiP Cam 0" || root.viewSource === "PiP Cam 1")
+            return root.cam1Signal ? "pip" : "single"
+        return "single"
+    }
+    // True when the main item takes cam1's bridge (and the second item cam0's).
+    readonly property bool swapped: {
+        if (root.viewSource === "Cam 1" || root.viewSource === "PiP Cam 1")
+            return root.cam1Signal
+        return root.viewSource === "Both (Cam 1 left)"
+    }
+    readonly property bool cam1FallbackBanner: (root.viewSource === "Cam 1" || root.viewSource === "PiP Cam 1") && !root.cam1Signal
+    // The pane that shows cam1 in a Both view, black with a NO SIGNAL line while cam1 sends nothing.
+    readonly property bool cam1PaneMissing: root.layoutKind === "both" && !root.cam1Signal
+    readonly property bool mainPaneVisible: !(root.cam1PaneMissing && root.swapped)
+    readonly property bool secondPaneVisible: root.layoutKind !== "single" && !(root.cam1PaneMissing && !root.swapped)
+
+    // cam1.settings, read the way the primary's own are (width/height or resolution, then the 1928x1090 style
+    // sizes folded to the nominal ones).
+    readonly property var cam1S: apertarControlBridge ? apertarControlBridge.cam1Settings : ({})
+    readonly property string cam1ResolutionValue: {
+        var s = root.cam1S
+        var w = 0
+        var h = 0
+        if (s.width > 0 && s.height > 0) {
+            w = Number(s.width)
+            h = Number(s.height)
+        } else if (s.resolution) {
+            var parts = String(s.resolution).split("x")
+            if (parts.length === 2) {
+                w = parseInt(parts[0])
+                h = parseInt(parts[1])
+            }
+        }
+        if (!(w > 0 && h > 0))
+            return ""
+        if (w === 1928 && h === 1090)
+            return "1920x1080"
+        if (w === 3856 && h === 2180)
+            return "3840x2160"
+        return w + "x" + h
+    }
+    readonly property bool cam1ProcessedVideo: String(root.cam1S.recording_format || "").toLowerCase().replace(".", "") === "h264"
+    readonly property string cam1PreviewAspectResolution: {
+        if (!root.cam1ProcessedVideo)
+            return root.cam1ResolutionValue
+        if (root.cam1S.h264_width > 0 && root.cam1S.h264_height > 0)
+            return Number(root.cam1S.h264_width) + "x" + Number(root.cam1S.h264_height)
+        return root.processedVideoDefaultResolutionValue
+    }
+    // Each pane letterboxes its own aspect; without cam1's size it borrows cam0's.
+    readonly property real cam1ImageAspect: root.cam1PreviewAspectResolution.length > 0
+                                            ? root.aspectRatioForResolution(root.cam1PreviewAspectResolution)
+                                            : root.cam0ImageAspect
+    readonly property real desqueezeFactor: (settingsBridge && settingsBridge.anamorphicDesqueezeEnabled && !root.smpteEnabled)
+                                            ? root.anamorphicRatioValue(settingsBridge.anamorphicRatio) : 1.0
+    readonly property real mainDisplayAspect: root.previewImageAspectRatio * root.desqueezeFactor
+    readonly property real secondImageAspect: root.swapped ? root.cam0ImageAspect : root.cam1ImageAspect
+    readonly property real secondDisplayAspect: root.secondImageAspect * root.desqueezeFactor
+
+    // Geometry in the monitor surface's own coordinates (the surface is the rotated item).
+    readonly property real paneDividerWidth: 4
+    readonly property real paneHalfWidth: Math.floor((monitorSurface.width - root.paneDividerWidth) / 2)
+    readonly property real mainPaneWidth: root.layoutKind === "both" ? root.paneHalfWidth : monitorSurface.width
+    readonly property real mainPaneHeight: monitorSurface.height
+    readonly property real secondPaneX: root.layoutKind === "both" ? root.paneHalfWidth + root.paneDividerWidth
+                                                                    : monitorSurface.width - root.secondPaneWidth - monitorSurface.width * 0.03
+    readonly property real secondPaneWidth: root.layoutKind === "both" ? monitorSurface.width - root.paneHalfWidth - root.paneDividerWidth
+                                                                        : monitorSurface.width * 0.28
+    // The inset's height follows its frame (U-new6); a pane in a Both view is as tall as the surface.
+    readonly property real secondPaneHeight: root.layoutKind === "both" ? monitorSurface.height
+                                                                         : root.secondPaneWidth / Math.max(0.1, root.secondDisplayAspect)
+    readonly property real secondPaneY: root.layoutKind === "both" ? 0
+                                                                    : monitorSurface.height - root.secondPaneHeight - monitorSurface.width * 0.03
+    // The picture inside each pane, letterboxed (the renderer fits the same way).
+    readonly property real mainFitWidth: (root.mainPaneWidth / Math.max(1, root.mainPaneHeight)) > root.mainDisplayAspect
+                                         ? root.mainPaneHeight * root.mainDisplayAspect : root.mainPaneWidth
+    readonly property real mainFitHeight: (root.mainPaneWidth / Math.max(1, root.mainPaneHeight)) > root.mainDisplayAspect
+                                          ? root.mainPaneHeight : root.mainPaneWidth / root.mainDisplayAspect
+    readonly property real mainFitX: Math.round((root.mainPaneWidth - root.mainFitWidth) / 2)
+    readonly property real mainFitY: Math.round((root.mainPaneHeight - root.mainFitHeight) / 2)
+    readonly property real secondFitWidth: (root.secondPaneWidth / Math.max(1, root.secondPaneHeight)) > root.secondDisplayAspect
+                                           ? root.secondPaneHeight * root.secondDisplayAspect : root.secondPaneWidth
+    readonly property real secondFitHeight: (root.secondPaneWidth / Math.max(1, root.secondPaneHeight)) > root.secondDisplayAspect
+                                            ? root.secondPaneHeight : root.secondPaneWidth / root.secondDisplayAspect
+    readonly property real secondFitX: root.secondPaneX + Math.round((root.secondPaneWidth - root.secondFitWidth) / 2)
+    readonly property real secondFitY: root.secondPaneY + Math.round((root.secondPaneHeight - root.secondFitHeight) / 2)
     property int timecodeFrames: 0
     property string localTimecode: "00:00:00:00"
     readonly property string timecode: synchronizedCaptureStateAvailable
@@ -412,8 +556,15 @@ Window {
         CameraPreviewItem {
             id: preview
             objectName: "externalPreviewItem"
-            anchors.fill: parent
-            bridge: apertarPreviewBridge
+            // The main pane: full screen, or the left half in a Both view. With the panes swapped it
+            // takes cam1's bridge (the renderer resets its frame state on a bridge change). The aids
+            // below are properties of this item alone; the second item sets none of them.
+            x: 0
+            y: 0
+            width: root.mainPaneWidth
+            height: root.mainPaneHeight
+            visible: root.mainPaneVisible
+            bridge: (root.swapped && root.cam1Available) ? apertarPreviewBridge1 : apertarPreviewBridge
             zoom: 1.0
             panX: 0.0
             panY: 0.0
@@ -430,35 +581,89 @@ Window {
             falseColorMode: settingsBridge ? settingsBridge.falseColorMode : 0
             lutPreviewEnabled: settingsBridge ? settingsBridge.lutPreviewEnabled : false
             lutPreviewFile: settingsBridge ? settingsBridge.lutPreviewFile : ""
-            exposureReference: apertarControlBridge ? apertarControlBridge.previewExposureReference : ({})
+            // The reference is cam0's; a cam1 main pane has none of its own yet.
+            exposureReference: apertarControlBridge && !root.swapped ? apertarControlBridge.previewExposureReference : ({})
             displayRotation: root.externalMonitorRotation
             previewAspectRatio: root.previewImageAspectRatio
         }
 
-        // T65 test inset; T66 replaces. The cam1 picture, lower right, only with APERTAR_UI_CAM1_INSET.
+        // The second pane (cam1, or cam0 when swapped): the right half of a Both view, or the inset in PiP.
+        // It keeps the display transforms (LUT, desqueeze, SMPTE, rotation, aspect) and none of the aids
+        // (zebra, peaking, false colour, greyscale): those are per-item properties and stay at their
+        // defaults here (off).
         CameraPreviewItem {
             id: preview1
             objectName: "externalPreviewItem1"
-            readonly property bool cam1Available: typeof apertarPreviewBridge1 !== "undefined" && apertarPreviewBridge1 !== null
-            readonly property real frameAspect: root.previewImageAspectRatio > 0 ? root.previewImageAspectRatio : (16 / 9)
-            bridge: cam1Available ? apertarPreviewBridge1 : null
-            visible: cam1Available && typeof cam1InsetTest !== "undefined" && cam1InsetTest
-            width: parent.width * 0.28
-            height: width / frameAspect
-            x: parent.width - width - parent.width * 0.03
-            y: parent.height - height - parent.width * 0.03
+            bridge: root.cam1Available ? (root.swapped ? apertarPreviewBridge : apertarPreviewBridge1) : null
+            visible: root.cam1Available && root.secondPaneVisible
+            x: root.secondPaneX
+            y: root.secondPaneY
+            width: root.secondPaneWidth
+            height: root.secondPaneHeight
             z: 5
             zoom: 1.0
             panX: 0.0
             panY: 0.0
+            smpteEnabled: root.smpteEnabled
+            anamorphicDesqueezeEnabled: settingsBridge ? settingsBridge.anamorphicDesqueezeEnabled : false
+            anamorphicDesqueezeRatio: root.anamorphicRatioValue(settingsBridge ? settingsBridge.anamorphicRatio : "1.33x")
+            lutPreviewEnabled: settingsBridge ? settingsBridge.lutPreviewEnabled : false
+            lutPreviewFile: settingsBridge ? settingsBridge.lutPreviewFile : ""
             displayRotation: root.externalMonitorRotation
-            previewAspectRatio: preview1.frameAspect
+            previewAspectRatio: root.secondImageAspect
+        }
 
-            Rectangle {
-                anchors.fill: parent
-                color: "transparent"
-                border.color: "white"
-                border.width: 2
+        // The divider between the panes of a Both view.
+        Rectangle {
+            visible: root.layoutKind === "both"
+            x: root.paneHalfWidth
+            y: 0
+            width: root.paneDividerWidth
+            height: parent.height
+            color: "#262626"
+            z: 6
+        }
+
+        // A Both pane whose camera is cam1 while cam1 sends nothing: black, with the reason.
+        Text {
+            visible: root.cam1PaneMissing
+            x: root.swapped ? 0 : root.secondPaneX
+            y: 0
+            width: root.swapped ? root.mainPaneWidth : root.secondPaneWidth
+            height: parent.height
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            text: "CAM1 NO SIGNAL"
+            color: "#ffd54a"
+            font.family: interBold.font.family
+            font.pixelSize: 26
+            font.letterSpacing: 2.0
+            renderType: Text.NativeRendering
+            z: 6
+        }
+
+        // Cam 1 and PiP Cam 1 fall back to cam0 full screen when cam1 sends no frames.
+        Rectangle {
+            visible: root.cam1FallbackBanner
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 36 + 58 + 12
+            width: fallbackBannerText.implicitWidth + 28
+            height: 36
+            radius: 18
+            color: "#e63b2a13"
+            border.width: 1
+            border.color: "#bfaa7937"
+            z: 21
+
+            Text {
+                id: fallbackBannerText
+                anchors.centerIn: parent
+                text: "CAM1 NO SIGNAL \u00b7 SHOWING CAM0"
+                color: "#ffd27a"
+                font.family: interBold.font.family
+                font.pixelSize: 17
+                font.letterSpacing: 1.6
+                renderType: Text.NativeRendering
             }
         }
 
