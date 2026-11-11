@@ -204,11 +204,11 @@ Window {
                                                                   : externalNoMedia ? "NO MEDIA"
                                                                   : (root.timelapseActive ? "TIMELAPSE" : (root.pillRecordingActive ? "REC" : apertarControlBridge && apertarControlBridge.mediaWritesPending && !apertarControlBridge.bufferSafetyStop ? "WRITING" : "READY"))
     readonly property var topMonitorInfoItems: [
-        { label: "FORMAT", value: root.formatInfoValue },
-        { label: "FPS", value: root.fpsDisplayValue, cameraSet: !!apertarControlBridge && apertarControlBridge.storagePrerollActive },
-        { label: "ISO", value: root.isoValue, cameraSet: (!!apertarControlBridge && apertarControlBridge.isoSetByCamera) || root.isoOnAddedCap },
-        { label: "SHUTTER", value: root.shutterDisplayValue, cameraSet: !!apertarControlBridge && apertarControlBridge.shutterSetByCamera },
-        { label: "WB", value: root.wbValue, cameraSet: !!apertarControlBridge && apertarControlBridge.whiteBalanceSetByCamera }
+        { label: "FORMAT", value: root.overlayFormatValue },
+        { label: "FPS", value: root.overlayFpsValue, cameraSet: root.overlayCam1 ? false : (!!apertarControlBridge && apertarControlBridge.storagePrerollActive) },
+        { label: "ISO", value: root.overlayIsoValue, cameraSet: root.overlayCam1 ? root.cam1IsoSetByCamera : ((!!apertarControlBridge && apertarControlBridge.isoSetByCamera) || root.isoOnAddedCap) },
+        { label: "SHUTTER", value: root.overlayShutterValue, cameraSet: root.overlayCam1 ? root.cam1ShutterSetByCamera : (!!apertarControlBridge && apertarControlBridge.shutterSetByCamera) },
+        { label: "WB", value: root.overlayWbValue, cameraSet: root.overlayCam1 ? root.cam1WbSetByCamera : (!!apertarControlBridge && apertarControlBridge.whiteBalanceSetByCamera) }
     ]
 
     // ---- Dual sensor views (T66) ----
@@ -338,6 +338,58 @@ Window {
     readonly property real mainDisplayAspect: root.previewImageAspectRatio * root.desqueezeFactor
     readonly property real secondImageAspect: root.swapped ? root.cam0ImageAspect : root.cam1ImageAspect
     readonly property real secondDisplayAspect: root.secondImageAspect * root.desqueezeFactor
+
+    // ---- The info overlay follows the window's main camera (T66) ----
+    // The main camera is the full-screen one, or the left pane's in a Both view: cam1 exactly when the
+    // main item holds cam1's bridge. Its values come from cam1.settings; under auto, the value in use.
+    readonly property bool overlayCam1: root.cam1Present && root.swapped
+    readonly property string cam1IsoInUse: {
+        var s = root.cam1S
+        if (s.iso_auto === true)
+            return Number(s.iso_actual) > 0 ? String(Math.round(Number(s.iso_actual))) : "Auto"
+        return root.cam1IsoSet()
+    }
+    readonly property string cam1WbInUse: {
+        var s = root.cam1S
+        if (s.wb_auto === true) {
+            var kelvin = Math.round(Number(s.wb_actual_kelvin))
+            return (s.wb_measured === true && kelvin > 0) ? kelvin + "K" : "Auto"
+        }
+        return root.cam1WbSet()
+    }
+    readonly property bool cam1IsoOnAddedCap: {
+        var maximum = Number(root.cam1S.iso_max)
+        if (!(maximum > 0) || Math.round(Number(root.cam1S.iso)) !== maximum)
+            return false
+        var own = settingsBridge && settingsBridge.isoSteps.length > 0 ? settingsBridge.isoSteps
+                  : [100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200]
+        return !own.some(v => Math.abs(Number(v) - maximum) < 0.5)
+    }
+    readonly property bool cam1IsoSetByCamera: root.cam1S.iso_auto_after_clear_hdr === true || root.cam1IsoOnAddedCap
+    readonly property bool cam1WbSetByCamera: root.cam1S.wb_auto_after_clear_hdr === true
+    readonly property bool cam1ShutterSetByCamera: root.recordingActive && root.cam1S.fps_speed_ramp === true
+                                                   && root.cam1S.fps_speed_ramp_keep_exposure === true
+    readonly property string overlayFpsValue: root.overlayCam1 && root.cam1FpsNumber() > 0
+                                              ? Number(root.cam1FpsNumber()).toFixed(3) : root.fpsDisplayValue
+    readonly property string overlayIsoValue: root.overlayCam1 && root.cam1IsoInUse.length > 0 ? root.cam1IsoInUse : root.isoValue
+    readonly property string overlayShutterValue: root.overlayCam1 && root.cam1ShutterAngle().length > 0
+                                                  ? root.cam1ShutterAngle() : root.shutterDisplayValue
+    readonly property string overlayWbValue: root.overlayCam1 && root.cam1WbInUse.length > 0 ? root.cam1WbInUse : root.wbValue
+    readonly property string overlayFormatValue: root.overlayCam1
+                                                 ? (root.cam1ProcessedVideo
+                                                    ? root.cam1PreviewAspectResolution + " H.264"
+                                                    : root.cam1RecordingFormat)
+                                                 : root.formatInfoValue
+    readonly property string cam1BitDepthValue: Number(root.cam1S.raw_bit_depth) > 0 ? Number(root.cam1S.raw_bit_depth) + "-bit" : ""
+    readonly property bool cam1RawRecordFormat: root.cam1RecordingFormat.indexOf("ProRes") !== 0 && !root.cam1ProcessedVideo
+    readonly property string overlayResolutionLine: root.overlayCam1 && root.cam1ResolutionValue.length > 0
+                                                    ? root.cam1ResolutionValue
+                                                      + (root.cam1RawRecordFormat && root.cam1BitDepthValue.length > 0
+                                                         ? " \u00b7 " + root.cam1BitDepthValue + (root.cam1S.clear_hdr === true ? " \u00b7 Clear HDR" : "")
+                                                         : "")
+                                                    : root.resolutionLineValue
+    // cam1's own mode, picked by closest() for a different sensor, is the system's: italic like the ladder's.
+    readonly property bool overlayResolutionSystemChosen: root.overlayCam1 && root.cam1ModeSystemChosen
 
     // ---- Pane tags and frames (T66, section 5.0 with v2.5 A2) ----
     // cam1Settings (UI.conf) is "unison" or the comma list of controls tied to cam0. A tied control is
@@ -1418,6 +1470,32 @@ Window {
             }
         }
 
+            // Camera badge: names the main camera's picture whenever cam1 is configured. A Both view's pane
+            // tags name the cameras, so the badge is off there. Photo and timelapse show cam0 tagged.
+            Rectangle {
+                visible: root.cam1Present && root.layoutKind !== "both"
+                x: 0
+                y: topInfoRow.height + 8
+                width: cameraBadgeText.implicitWidth + 20
+                height: cameraBadgeText.implicitHeight + 8
+                radius: 6
+                color: "#99000000"
+                border.width: 1
+                border.color: "#33ffffff"
+
+                Text {
+                    id: cameraBadgeText
+                    anchors.centerIn: parent
+                    text: root.photoRule && root.requestedSource !== "Cam 0" ? "PHOTO \u00b7 CAM0"
+                          : (root.overlayCam1 ? "CAM1" : "CAM0")
+                    color: "white"
+                    font.family: interBold.font.family
+                    font.pixelSize: 18
+                    font.letterSpacing: 1.6
+                    renderType: Text.NativeRendering
+                }
+            }
+
             Column {
             anchors.left: parent.left
             anchors.bottom: parent.bottom
@@ -1462,7 +1540,8 @@ Window {
                 Text {
                     x: root.hudShadowOffset
                     y: root.hudShadowOffset
-                    text: root.resolutionLineValue
+                    text: root.overlayResolutionLine
+                    font.italic: root.overlayResolutionSystemChosen
                     color: root.hudShadowColor
                     font.family: interBold.font.family
                     font.pixelSize: 34
@@ -1471,7 +1550,8 @@ Window {
 
                 Text {
                     id: resolutionText
-                    text: root.resolutionLineValue
+                    text: root.overlayResolutionLine
+                    font.italic: root.overlayResolutionSystemChosen
                     color: "white"
                     font.family: interBold.font.family
                     font.pixelSize: 34
