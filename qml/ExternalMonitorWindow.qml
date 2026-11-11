@@ -304,8 +304,25 @@ Window {
             return "3840x2160"
         return w + "x" + h
     }
-    readonly property bool cam1ProcessedVideo: String(root.cam1S.recording_format || "").toLowerCase().replace(".", "") === "h264"
+    // cam1's recording format, named the way the primary names its own; cam0's while cam1.settings has none.
+    readonly property string cam1RecordingFormat: {
+        var f = String(root.cam1S.recording_format || "").toLowerCase()
+        if (f.length === 0)
+            return root.recordingFormatValue
+        if (f.indexOf("prores") === 0) {
+            var profile = String(root.cam1S.prores_profile || "422").toLowerCase()
+            return "ProRes " + (profile === "proxy" ? "Proxy" : profile === "lt" ? "LT" : profile === "hq" ? "HQ" : "422")
+        }
+        if (f === "mlv")
+            return "MLV"
+        if (f === "h264" || f === "h.264" || f === "mp4")
+            return "H.264"
+        return "cDNG"
+    }
+    readonly property bool cam1ProcessedVideo: root.cam1RecordingFormat === "H.264"
     readonly property string cam1PreviewAspectResolution: {
+        if (root.cam1ResolutionValue.length === 0)
+            return ""
         if (!root.cam1ProcessedVideo)
             return root.cam1ResolutionValue
         if (root.cam1S.h264_width > 0 && root.cam1S.h264_height > 0)
@@ -321,6 +338,126 @@ Window {
     readonly property real mainDisplayAspect: root.previewImageAspectRatio * root.desqueezeFactor
     readonly property real secondImageAspect: root.swapped ? root.cam0ImageAspect : root.cam1ImageAspect
     readonly property real secondDisplayAspect: root.secondImageAspect * root.desqueezeFactor
+
+    // ---- Pane tags and frames (T66, section 5.0 with v2.5 A2) ----
+    // cam1Settings (UI.conf) is "unison" or the comma list of controls tied to cam0. A tied control is
+    // cam0's; resolution untied acts as Own, an untied iso, shutter, fps or wb as Independent for that control.
+    function cam1Tied(control) {
+        var ties = (settingsBridge && settingsBridge.cam1Settings !== undefined) ? String(settingsBridge.cam1Settings) : "unison"
+        if (ties === "unison")
+            return true
+        return ("," + ties + ",").indexOf("," + control + ",") >= 0
+    }
+    readonly property bool cam1DifferentSensor: root.cam1Present
+                                                && String(apertarControlBridge.cam1Sensor).length > 0
+                                                && String(apertarControlBridge.sensorName).length > 0
+                                                && String(apertarControlBridge.cam1Sensor).toLowerCase()
+                                                   !== String(apertarControlBridge.sensorName).toLowerCase()
+    // cam1's mode shows in its pane tag when its resolution is its own (Own), and for a different sensor
+    // at every level; the closest-match pick (resolution tied) is the system's choice and goes italic.
+    readonly property bool cam1ModeInTag: root.cam1Present && (!root.cam1Tied("resolution") || root.cam1DifferentSensor)
+    readonly property bool cam1ModeSystemChosen: root.cam1DifferentSensor && root.cam1Tied("resolution")
+
+    function compactNumber(value, decimals) {
+        var text = Number(value).toFixed(decimals)
+        if (text.indexOf(".") >= 0)
+            text = text.replace(/0+$/, "").replace(/\.$/, "")
+        return text
+    }
+    function cam1FpsNumber() {
+        var value = Number(root.cam1S.fps)
+        return value > 0 ? value : 0
+    }
+    function cam1IsoSet() {
+        var s = root.cam1S
+        if (s.iso_auto === true)
+            return "Auto"
+        return Number(s.iso) > 0 ? String(Math.round(Number(s.iso))) : ""
+    }
+    function cam1ShutterAngle() {
+        var s = root.cam1S
+        if (s.shutter_auto === true)
+            return "Auto"
+        var us = Number(s.shutter_us)
+        var fps = root.cam1FpsNumber()
+        if (!(us > 0) || !(fps > 0))
+            return ""
+        return root.compactNumber(Math.round(us * fps * 360 / 1000000 * 100) / 100, 2) + "\u00b0"
+    }
+    function cam1WbSet() {
+        var s = root.cam1S
+        if (s.wb_auto === true)
+            return "Auto"
+        return Number(s.wb_kelvin) > 0 ? String(Math.round(Number(s.wb_kelvin))) + "K" : ""
+    }
+    function cam1ModeText() {
+        var res = root.cam1ResolutionValue
+        if (res.length === 0)
+            return ""
+        var label = res === "1920x1080" ? "1080p" : (res === "3840x2160" ? "2160p" : res)
+        var format = root.cam1RecordingFormat
+        var tail = ""
+        if (format.indexOf("ProRes") === 0)
+            tail = "ProRes"
+        else if (format === "H.264")
+            tail = "H.264"
+        else if (Number(root.cam1S.raw_bit_depth) > 0)
+            tail = Number(root.cam1S.raw_bit_depth) + "-bit"
+        return tail.length > 0 ? label + " \u00b7 " + tail : label
+    }
+    // The values of the untied controls that differ between the cameras, for one camera's tag (0 or 1).
+    function differingValues(camera) {
+        var out = []
+        if (!root.cam1Present || !apertarControlBridge)
+            return out
+        if (!root.cam1Tied("iso")) {
+            var iso0 = String(apertarControlBridge.iso)
+            var iso1 = root.cam1IsoSet()
+            if (iso1.length > 0 && iso0 !== iso1)
+                out.push("ISO " + (camera === 1 ? iso1 : iso0))
+        }
+        if (!root.cam1Tied("shutter")) {
+            var shutter0 = String(apertarControlBridge.shutterAngle)
+            var shutter1 = root.cam1ShutterAngle()
+            if (shutter1.length > 0 && shutter0 !== shutter1)
+                out.push(camera === 1 ? shutter1 : shutter0)
+        }
+        if (!root.cam1Tied("fps")) {
+            var fps0 = parseFloat(apertarControlBridge.fps)
+            var fps1 = root.cam1FpsNumber()
+            if (fps1 > 0 && Math.abs(fps0 - fps1) > 0.001)
+                out.push(root.compactNumber(camera === 1 ? fps1 : fps0, 3) + " FPS")
+        }
+        if (!root.cam1Tied("wb")) {
+            var wb0 = String(apertarControlBridge.whiteBalance)
+            var wb1 = root.cam1WbSet()
+            if (wb1.length > 0 && wb0 !== wb1)
+                out.push(camera === 1 ? wb1 : wb0)
+        }
+        return out
+    }
+    // StyledText: the system-chosen mode is italic.
+    function paneTagText(camera) {
+        var parts = [camera === 1 ? "CAM1" : "CAM0"]
+        if (camera === 1 && root.cam1ModeInTag) {
+            var mode = root.cam1ModeText()
+            if (mode.length > 0)
+                parts.push(root.cam1ModeSystemChosen ? "<i>" + mode + "</i>" : mode)
+        }
+        var diffs = root.differingValues(camera)
+        for (var i = 0; i < diffs.length; ++i)
+            parts.push(diffs[i])
+        return parts.join(" \u00b7 ")
+    }
+
+    // Which cameras the next or running take records (Core's record_cameras: cam0, cam1, both, none).
+    readonly property string recordCamerasValue: apertarControlBridge ? String(apertarControlBridge.recordCameras) : ""
+    readonly property bool cam0InTake: root.recordCamerasValue !== "cam1" && root.recordCamerasValue !== "none"
+    readonly property bool cam1InTake: root.recordCamerasValue === "cam1" || root.recordCamerasValue === "both"
+    readonly property bool cam0Recording: root.pillRecordingActive && root.cam0InTake
+    readonly property bool cam1Recording: root.pillRecordingActive && root.cam1InTake
+    readonly property bool mainRecording: root.swapped ? root.cam1Recording : root.cam0Recording
+    readonly property bool secondRecording: root.swapped ? root.cam0Recording : root.cam1Recording
 
     // Geometry in the monitor surface's own coordinates (the surface is the rotated item).
     readonly property real paneDividerWidth: 4
@@ -640,6 +777,79 @@ Window {
             font.letterSpacing: 2.0
             renderType: Text.NativeRendering
             z: 6
+        }
+
+        // Each pane gets a 2 px white frame around its picture, red while its camera records.
+        Rectangle {
+            visible: root.layoutKind !== "single"
+            x: root.mainFitX
+            y: root.mainFitY
+            width: root.mainFitWidth
+            height: root.mainFitHeight
+            color: "transparent"
+            border.width: 2
+            border.color: root.mainRecording ? "#ff4d4d" : "white"
+            z: 7
+        }
+
+        Rectangle {
+            visible: root.layoutKind !== "single"
+            x: root.secondFitX
+            y: root.secondFitY
+            width: root.secondFitWidth
+            height: root.secondFitHeight
+            color: "transparent"
+            border.width: 2
+            border.color: root.secondRecording ? "#ff4d4d" : "white"
+            z: 7
+        }
+
+        // Pane tags of the Both views: the camera, its mode when it is cam1's own or another sensor's,
+        // and the values that differ.
+        Rectangle {
+            visible: root.layoutKind === "both"
+            x: root.mainFitX + 12
+            y: root.mainFitY + 12
+            width: mainPaneTagText.implicitWidth + 20
+            height: mainPaneTagText.implicitHeight + 10
+            radius: 6
+            color: "#99000000"
+            z: 8
+
+            Text {
+                id: mainPaneTagText
+                anchors.centerIn: parent
+                textFormat: Text.StyledText
+                text: root.paneTagText(root.swapped ? 1 : 0)
+                color: "white"
+                font.family: interBold.font.family
+                font.pixelSize: 18
+                font.letterSpacing: 1.4
+                renderType: Text.NativeRendering
+            }
+        }
+
+        Rectangle {
+            visible: root.layoutKind === "both"
+            x: root.secondFitX + 12
+            y: root.secondFitY + 12
+            width: secondPaneTagText.implicitWidth + 20
+            height: secondPaneTagText.implicitHeight + 10
+            radius: 6
+            color: "#99000000"
+            z: 8
+
+            Text {
+                id: secondPaneTagText
+                anchors.centerIn: parent
+                textFormat: Text.StyledText
+                text: root.paneTagText(root.swapped ? 0 : 1)
+                color: "white"
+                font.family: interBold.font.family
+                font.pixelSize: 18
+                font.letterSpacing: 1.4
+                renderType: Text.NativeRendering
+            }
         }
 
         // Cam 1 and PiP Cam 1 fall back to cam0 full screen when cam1 sends no frames.
@@ -1700,5 +1910,6 @@ Window {
         border.color: "#ff4d4d"
         border.width: Math.max(4, Math.round(Math.min(width, height) * 0.008))
         visible: root.recordingActive && !!settingsBridge && settingsBridge.recordingFrameEnabled
+                 && root.layoutKind !== "both" && (!root.cam1Present || root.mainRecording)
     }
 }
