@@ -53,6 +53,11 @@ public:
     double fps() const { return m_fps; }
     void setFps(double value);
 
+    // Time left is one value for the rig: free space over the summed data rates of the cameras in the
+    // take. cam1's frame is cam0's scaled by cam1SizeScale (pixels x bits), at cam1's own fps.
+    // The defaults (cam0 alone) are today's single-camera estimate.
+    void setCameraRates(bool cam0InTake, bool cam1InTake, double cam1SizeScale, double cam1Fps);
+
     qulonglong freeBytes() const { return m_freeBytes; }
     qulonglong totalBytes() const { return m_totalBytes; }
     qint64 remainingSeconds() const { return m_remainingSeconds; }
@@ -145,6 +150,10 @@ private:
 
     double m_frameSizeMB = 5.3;   // editable later
     double m_fps = 24.0;          // updated from QML
+    bool m_cam0InTake = true;
+    bool m_cam1InTake = false;
+    double m_cam1SizeScale = 1.0;
+    double m_cam1Fps = 0.0;
     qulonglong m_freeBytes = 0;
     qulonglong m_totalBytes = 0;
     qint64 m_remainingSeconds = 0;

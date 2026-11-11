@@ -1892,6 +1892,9 @@ Window {
             id: remainingColumn
             anchors.right: parent.right
             anchors.bottom: parent.bottom
+            // With a PiP inset shown the whole label (heading and minutes together) is dimmed and stays in place;
+            // the inset may cover part of it (the User's choice). Every other layout is as before.
+            opacity: root.layoutKind === "pip" ? 0.5 : 1.0
             width: Math.max(remainingLabelItem.width, remainingValueItem.width)
             spacing: 2
             layer.enabled: visible

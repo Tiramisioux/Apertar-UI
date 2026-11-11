@@ -319,6 +319,45 @@ int main(int argc, char *argv[])
 
     settings.setControlBridge(&apertarControlBridge);
     monitorRuntimeBridge.setMediaBridge(&mediaBridge);
+    // T66: REMAINING counts the cameras in the take. cam1's frame is cam0's scaled by pixels and bit depth.
+    auto syncMediaRates = [&]() {
+        const QString recordCameras = apertarControlBridge.recordCameras();
+        const bool cam1InTake = apertarControlBridge.cam1Present()
+            && (recordCameras == QLatin1String("cam1") || recordCameras == QLatin1String("both"));
+        const bool cam0InTake = recordCameras != QLatin1String("cam1") && recordCameras != QLatin1String("none");
+        double scale = 1.0;
+        double fps1 = 0.0;
+        if (cam1InTake) {
+            const QVariantMap cam1 = apertarControlBridge.cam1Settings();
+            double w1 = cam1.value(QStringLiteral("width")).toDouble();
+            double h1 = cam1.value(QStringLiteral("height")).toDouble();
+            if (!(w1 > 0.0 && h1 > 0.0)) {
+                const QStringList parts = cam1.value(QStringLiteral("resolution")).toString().split(QLatin1Char('x'));
+                if (parts.size() == 2) {
+                    w1 = parts.at(0).toDouble();
+                    h1 = parts.at(1).toDouble();
+                }
+            }
+            const QStringList parts0 = apertarControlBridge.resolution().split(QLatin1Char('x'));
+            const double w0 = parts0.size() == 2 ? parts0.at(0).toDouble() : 0.0;
+            const double h0 = parts0.size() == 2 ? parts0.at(1).toDouble() : 0.0;
+            const double bits1 = cam1.value(QStringLiteral("raw_bit_depth")).toDouble();
+            const double bits0 = apertarControlBridge.rawBitDepth().section(QLatin1Char('-'), 0, 0).toDouble();
+            if (w1 > 0.0 && h1 > 0.0 && w0 > 0.0 && h0 > 0.0) {
+                scale = (w1 * h1) / (w0 * h0);
+                if (bits1 > 0.0 && bits0 > 0.0)
+                    scale *= bits1 / bits0;
+            }
+            fps1 = cam1.value(QStringLiteral("fps")).toDouble();
+        }
+        mediaBridge.setCameraRates(cam0InTake, cam1InTake, scale, fps1);
+    };
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::recordCamerasChanged, &mediaBridge, syncMediaRates);
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::cam1PresentChanged, &mediaBridge, syncMediaRates);
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::cam1SettingsChanged, &mediaBridge, syncMediaRates);
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::resolutionChanged, &mediaBridge, syncMediaRates);
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::rawBitDepthChanged, &mediaBridge, syncMediaRates);
+    syncMediaRates();
     QObject::connect(&apertarControlBridge, &ApertarControlBridge::coreMediaStateChanged,
                      &mediaBridge, &MediaStatusBridge::setCoreMediaState);
     settings.setDefaultCameraControlsOpacity(displayConfig.controlsOpacity());
