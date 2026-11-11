@@ -418,6 +418,9 @@ void PreviewWindowRenderer::syncState()
             disconnect(m_bridge, nullptr, this, nullptr);
 
         m_bridge = newBridge;
+        // A pane given the other camera must not keep the old camera's last frame.
+        m_resetPreviewState = true;
+        m_loggedRenderUnavailable = false;
 
         if (m_bridge)
             connectBridgeSignals(m_bridge);
@@ -2417,6 +2420,11 @@ void PreviewWindowRenderer::render()
         return;
 
     m_updatePending = false;
+
+    // A hidden item draws and imports nothing (the cam1 pane when its layout is off).
+    if (!m_item->isVisible())
+        return;
+
     m_window->beginExternalCommands();
 
     initialize();
