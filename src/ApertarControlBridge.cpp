@@ -1,5 +1,6 @@
 #include "ApertarControlBridge.hpp"
 
+#include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -1045,7 +1046,7 @@ void ApertarControlBridge::updateRefreshTimer()
         || !m_connected;
     m_retryTimer.setInterval(needsFastPolling
                              ? kReconnectPollIntervalMs
-                             : (m_isoAuto || m_whiteBalanceAuto ? kLiveValuePollIntervalMs : kSteadyStatePollIntervalMs));
+                             : (m_isoAuto || m_whiteBalanceAuto || m_cam1Present ? kLiveValuePollIntervalMs : kSteadyStatePollIntervalMs));
 }
 
 void ApertarControlBridge::loadPersistedCameraSettings()
@@ -1470,6 +1471,107 @@ void ApertarControlBridge::setControlsStatus(const QJsonObject &object, const QS
     emit controlsStatusChanged();
 }
 
+void ApertarControlBridge::applyCam1State(const QJsonObject &state)
+{
+    if (state.contains(QStringLiteral("record_cameras"))) {
+        const QString recordCameras = state.value(QStringLiteral("record_cameras")).toString();
+        if (recordCameras != m_recordCameras) {
+            m_recordCameras = recordCameras;
+            emit recordCamerasChanged();
+        }
+    }
+
+    if (!state.value(QStringLiteral("cam1")).isObject())
+        return;
+    const QJsonObject cam1 = state.value(QStringLiteral("cam1")).toObject();
+
+    const QString cam1State = cam1.value(QStringLiteral("state")).toString();
+    const QString message = cam1.value(QStringLiteral("message")).toString();
+    const int dropped = cam1.value(QStringLiteral("recording_dropped_frames")).toInt(0);
+    const bool locked = cam1.value(QStringLiteral("locked")).toBool(false);
+    const double skewUs = cam1.value(QStringLiteral("skew_us")).toDouble(0.0);
+    // The second sensor's own name tells the kinds apart, never cam0's sensor field.
+    const QString sensor = cam1.value(QStringLiteral("sensor")).toString();
+    const bool sensorMono = cam1.value(QStringLiteral("sensor_mono")).toBool(false);
+
+    const bool becamePresent = !m_cam1Present;
+    const bool stateChanged = becamePresent || cam1State != m_cam1State || sensor != m_cam1Sensor
+        || message != m_cam1Message;
+    const bool fieldsChanged = stateChanged || dropped != m_cam1RecordingDroppedFrames
+        || locked != m_cam1Locked || skewUs != m_cam1SkewUs || sensorMono != m_cam1SensorMono;
+
+    m_cam1Present = true;
+    m_cam1State = cam1State;
+    m_cam1Message = message;
+    m_cam1RecordingDroppedFrames = dropped;
+    m_cam1Locked = locked;
+    m_cam1SkewUs = skewUs;
+    m_cam1Sensor = sensor;
+    m_cam1SensorMono = sensorMono;
+
+    if (stateChanged) {
+        qInfo().noquote() << QStringLiteral("cam1: state %1 sensor %2%3")
+            .arg(cam1State.isEmpty() ? QStringLiteral("unknown") : cam1State,
+                 sensor.isEmpty() ? QStringLiteral("unknown") : sensor,
+                 message.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(message));
+    }
+
+    if (cam1.value(QStringLiteral("settings")).isObject()) {
+        const QJsonObject settingsObject = cam1.value(QStringLiteral("settings")).toObject();
+        const QVariantMap settings = settingsObject.toVariantMap();
+        // Read the resolution the way the primary's own is read above.
+        int width = 0;
+        int height = 0;
+        QString resolution;
+        if (settingsObject.contains(QStringLiteral("width")) && settingsObject.contains(QStringLiteral("height"))) {
+            width = settingsObject.value(QStringLiteral("width")).toInt();
+            height = settingsObject.value(QStringLiteral("height")).toInt();
+        } else if (settingsObject.contains(QStringLiteral("resolution"))) {
+            parseResolutionValue(settingsObject.value(QStringLiteral("resolution")).toString(), &width, &height);
+        }
+        if (width > 0 && height > 0)
+            resolution = formatResolutionValue(width, height);
+        if (!resolution.isEmpty() && resolution != m_cam1Resolution) {
+            m_cam1Resolution = resolution;
+            qInfo().noquote() << QStringLiteral("cam1: resolution %1 (cam0 %2)").arg(resolution, m_resolution);
+        }
+        if (settings != m_cam1Settings) {
+            m_cam1Settings = settings;
+            emit cam1SettingsChanged();
+        }
+    }
+
+    if (becamePresent) {
+        emit cam1PresentChanged();
+        updateRefreshTimer();
+    }
+    if (fieldsChanged)
+        emit cam1Changed();
+}
+
+void ApertarControlBridge::clearCam1State()
+{
+    if (!m_cam1Present)
+        return;
+    m_cam1Present = false;
+    m_cam1State.clear();
+    m_cam1Message.clear();
+    m_cam1RecordingDroppedFrames = 0;
+    m_cam1Locked = false;
+    m_cam1SkewUs = 0.0;
+    m_cam1Sensor.clear();
+    m_cam1SensorMono = false;
+    m_cam1Resolution.clear();
+    const bool hadSettings = !m_cam1Settings.isEmpty();
+    m_cam1Settings.clear();
+    qInfo() << "cam1: gone from state";
+    emit cam1PresentChanged();
+    emit cam1Changed();
+    if (hadSettings)
+        emit cam1SettingsChanged();
+    updateRefreshTimer();
+}
+
 void ApertarControlBridge::applyCoreState(const QJsonObject &state)
 {
     setControlsStatus(state, QStringLiteral("controls_errors"), QStringLiteral("controls_warnings"));
@@ -1491,6 +1593,7 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         }
     }
     applyRecordingDroppedFrames(state);
+    applyCam1State(state);
     if (state.contains(QStringLiteral("recording_error"))) {
         const auto recordingError = state.value(QStringLiteral("recording_error")).toString();
         const bool changed = recordingError != m_lastRecordingError;
@@ -1853,12 +1956,18 @@ void ApertarControlBridge::processEventSocketMessages()
             continue;
 
         const auto message = doc.object();
-        if (m_pendingStateRequestId >= 0 && message.value(QStringLiteral("id")).toInt(-1) == m_pendingStateRequestId) {
+        const bool isStateReply = m_pendingStateRequestId >= 0
+            && message.value(QStringLiteral("id")).toInt(-1) == m_pendingStateRequestId;
+        if (isStateReply) {
             m_pendingStateRequestId = -1;
             setConnected(message.value(QStringLiteral("ok")).toBool(false));
             updateRefreshTimer();
         }
         applyCoreMessage(message);
+        // A full get_state answer without cam1 means the second sensor is gone; partial events never clear it.
+        if (isStateReply && message.value(QStringLiteral("ok")).toBool(false)
+            && !message.contains(QStringLiteral("cam1")))
+            clearCam1State();
     }
 }
 

@@ -57,6 +57,18 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(QString autofocusSpeed READ autofocusSpeed NOTIFY autofocusSpeedChanged)
     Q_PROPERTY(QString autofocusWindow READ autofocusWindow NOTIFY autofocusWindowChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    // The second sensor (T65): present only when Core's get_state carries a cam1 object.
+    Q_PROPERTY(bool cam1Present READ cam1Present NOTIFY cam1PresentChanged)
+    Q_PROPERTY(QString cam1State READ cam1State NOTIFY cam1Changed)
+    Q_PROPERTY(QString cam1Message READ cam1Message NOTIFY cam1Changed)
+    Q_PROPERTY(int cam1RecordingDroppedFrames READ cam1RecordingDroppedFrames NOTIFY cam1Changed)
+    Q_PROPERTY(bool cam1Locked READ cam1Locked NOTIFY cam1Changed)
+    Q_PROPERTY(double cam1SkewUs READ cam1SkewUs NOTIFY cam1Changed)
+    Q_PROPERTY(QString cam1Sensor READ cam1Sensor NOTIFY cam1Changed)
+    Q_PROPERTY(bool cam1SensorMono READ cam1SensorMono NOTIFY cam1Changed)
+    // cam1.settings: the same keys as the primary's own settings in get_state.
+    Q_PROPERTY(QVariantMap cam1Settings READ cam1Settings NOTIFY cam1SettingsChanged)
+    Q_PROPERTY(QString recordCameras READ recordCameras NOTIFY recordCamerasChanged)   // cam0 / cam1 / both / none
     Q_PROPERTY(bool recordingHasDroppedFrames READ recordingHasDroppedFrames NOTIFY recordingHealthChanged)
     Q_PROPERTY(int recordingDroppedFrames READ recordingDroppedFrames NOTIFY recordingHealthChanged)
     Q_PROPERTY(double bufferFill READ bufferFill NOTIFY bufferFillChanged)
@@ -135,6 +147,16 @@ public:
     QString proresColorProfile() const { return m_proresColorProfile; }
     QString cdngPreviewColorProfile() const { return m_cdngPreviewColorProfile; }
     QVariantMap previewExposureReference() const { return m_previewExposureReference; }
+    bool cam1Present() const { return m_cam1Present; }
+    QString cam1State() const { return m_cam1State; }
+    QString cam1Message() const { return m_cam1Message; }
+    int cam1RecordingDroppedFrames() const { return m_cam1RecordingDroppedFrames; }
+    bool cam1Locked() const { return m_cam1Locked; }
+    double cam1SkewUs() const { return m_cam1SkewUs; }
+    QString cam1Sensor() const { return m_cam1Sensor; }
+    bool cam1SensorMono() const { return m_cam1SensorMono; }
+    QVariantMap cam1Settings() const { return m_cam1Settings; }
+    QString recordCameras() const { return m_recordCameras; }
     QString cdngCompression() const { return m_cdngCompression; }
     bool rawCompressionSupported() const { return m_rawCompressionSupported; }
     bool rawRecordingSupported() const { return m_rawRecordingSupported; }
@@ -264,6 +286,10 @@ signals:
     void proresColorProfileChanged();
     void cdngPreviewColorProfileChanged();
     void previewExposureReferenceChanged();
+    void cam1PresentChanged();
+    void cam1Changed();
+    void cam1SettingsChanged();
+    void recordCamerasChanged();
     void cdngCompressionChanged();
     void recordingCapabilitiesChanged();
     void tuningFileChanged();
@@ -330,6 +356,8 @@ private:
                          QJsonObject *replyObject = nullptr);
     void applyCoreMessage(const QJsonObject &message);
     void applyCoreState(const QJsonObject &state);
+    void applyCam1State(const QJsonObject &state);
+    void clearCam1State();
     void applyClipNameState(const QJsonObject &state);
     void ensureEventSocketConnected();
     void processEventSocketMessages();
@@ -423,6 +451,17 @@ private:
     QString m_proresColorProfile = QStringLiteral("standard");
     QString m_cdngPreviewColorProfile = QStringLiteral("standard");
     QVariantMap m_previewExposureReference;
+    bool m_cam1Present = false;
+    QString m_cam1State;
+    QString m_cam1Message;
+    int m_cam1RecordingDroppedFrames = 0;
+    bool m_cam1Locked = false;
+    double m_cam1SkewUs = 0.0;
+    QString m_cam1Sensor;
+    bool m_cam1SensorMono = false;
+    QVariantMap m_cam1Settings;
+    QString m_cam1Resolution;
+    QString m_recordCameras;
     QString m_tuningFile;
     QString m_rawBitDepth = QStringLiteral("12-bit");
     bool m_clearHdr = false;
