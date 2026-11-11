@@ -40,6 +40,8 @@ private:
     QPointer<QQuickWindow> m_externalWindow;
     QPointer<CameraPreviewItem> m_externalPreviewItem;
     PreviewWindowRenderer *m_renderer = nullptr;
+    QPointer<CameraPreviewItem> m_externalPreviewItem1;   // the cam1 pane (T65)
+    PreviewWindowRenderer *m_renderer1 = nullptr;
     QTimer m_shutdownPopupTimer;
     bool m_hdmiExternalOnly = false;
     QPointer<DisplayCalibrationBridge> m_displayCalibration;

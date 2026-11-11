@@ -145,6 +145,7 @@ int runMonitorOnly(QGuiApplication &app)
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("apertarPreviewBridge", &apertarPreviewBridge);
+    engine.rootContext()->setContextProperty("cam1InsetTest", false);   // v1: cam0 only here; no apertarPreviewBridge1
     engine.rootContext()->setContextProperty("apertarControlBridge", &apertarControlBridge);
     engine.rootContext()->setContextProperty("settingsBridge", &settings);
     engine.rootContext()->setContextProperty("mediaBridge", &monitorRuntimeBridge);
@@ -289,6 +290,9 @@ int main(int argc, char *argv[])
                .arg(displayConfig.hdmiExternalOnly() ? QStringLiteral("true") : QStringLiteral("false"));
 
     ApertarPreviewSocketClient apertarPreviewBridge;
+    // T65: the second sensor's preview, on its own socket (the symlink test points it at cam0's).
+    ApertarPreviewSocketClient apertarPreviewBridge1;
+    const bool cam1InsetTest = environmentFlagEnabled("APERTAR_UI_CAM1_INSET");
     SystemStatsBridge statsBridge;
     DeviceInfoBridge deviceInfoBridge;
     SystemActionBridge systemActionBridge;
@@ -350,6 +354,22 @@ int main(int argc, char *argv[])
     });
     QObject::connect(&apertarControlBridge, &ApertarControlBridge::recordingChanged, &apertarPreviewBridge,
                      [&]() { apertarPreviewBridge.setRecording(apertarControlBridge.recording()); });
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::recordingChanged, &apertarPreviewBridge1,
+                     [&]() { apertarPreviewBridge1.setRecording(apertarControlBridge.recording()); });
+    // The cam1 preview connects only while Core's state has a cam1 (or in the inset test), and not in standby.
+    auto syncCam1Preview = [&]() {
+        const bool wanted = !apertarControlBridge.standby()
+            && (apertarControlBridge.cam1Present() || cam1InsetTest);
+        if (wanted)
+            apertarPreviewBridge1.connectToCore(QStringLiteral("/tmp/apertar-core-cam1.sock"));
+        else
+            apertarPreviewBridge1.disconnectFromCore();
+    };
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::cam1PresentChanged, &apertarPreviewBridge1,
+                     syncCam1Preview);
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::standbyChanged, &apertarPreviewBridge1,
+                     syncCam1Preview);
+    syncCam1Preview();
 
     QQmlApplicationEngine engine;
     auto *cdngProvider = new CdngImageProvider(false, false, false);
@@ -376,6 +396,8 @@ int main(int argc, char *argv[])
         }
     });
     engine.rootContext()->setContextProperty("apertarPreviewBridge", &apertarPreviewBridge);
+    engine.rootContext()->setContextProperty("apertarPreviewBridge1", &apertarPreviewBridge1);
+    engine.rootContext()->setContextProperty("cam1InsetTest", cam1InsetTest);
     engine.rootContext()->setContextProperty("statsBridge", &statsBridge);
     engine.rootContext()->setContextProperty("deviceInfoBridge", &deviceInfoBridge);
     engine.rootContext()->setContextProperty("displayConfigBridge", &displayConfig);

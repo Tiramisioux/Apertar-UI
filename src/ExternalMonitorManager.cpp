@@ -223,6 +223,8 @@ void ExternalMonitorManager::ensureWindow(QScreen *screen)
                     m_externalWindow = nullptr;
                     m_externalPreviewItem = nullptr;
                     m_renderer = nullptr;
+                    m_externalPreviewItem1 = nullptr;
+                    m_renderer1 = nullptr;
                 });
 
         connect(m_externalWindow, &QQuickWindow::screenChanged,
@@ -235,6 +237,14 @@ void ExternalMonitorManager::ensureWindow(QScreen *screen)
             m_renderer->setPreviewItem(m_externalPreviewItem);
         } else {
             qWarning() << "Could not find external preview item in external monitor window.";
+        }
+
+        // The cam1 pane's renderer comes second, so it draws on top and is rebuilt with the window on wake.
+        m_externalPreviewItem1 = m_externalWindow->findChild<CameraPreviewItem *>(QStringLiteral("externalPreviewItem1"));
+        if (m_externalPreviewItem1) {
+            m_renderer1 = new PreviewWindowRenderer(m_externalWindow);
+            m_renderer1->setDirectWindowRendering(true);
+            m_renderer1->setPreviewItem(m_externalPreviewItem1);
         }
     }
 
@@ -272,6 +282,8 @@ void ExternalMonitorManager::destroyWindow()
     m_externalWindow = nullptr;
     m_externalPreviewItem = nullptr;
     m_renderer = nullptr;
+    m_externalPreviewItem1 = nullptr;
+    m_renderer1 = nullptr;
 
     window->close();
     window->deleteLater();
