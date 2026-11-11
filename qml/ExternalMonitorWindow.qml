@@ -326,6 +326,14 @@ Window {
                 apertarPreviewBridge.disconnectFromCore()
             else
                 apertarPreviewBridge.connectToCore("/tmp/apertar-core.sock")
+            // The cam1 client exists only in the normal process.
+            if (typeof apertarPreviewBridge1 !== "undefined" && apertarPreviewBridge1) {
+                if (!apertarControlBridge.standby
+                        && (apertarControlBridge.cam1Present || (typeof cam1InsetTest !== "undefined" && cam1InsetTest)))
+                    apertarPreviewBridge1.connectToCore("/tmp/apertar-core-cam1.sock")
+                else
+                    apertarPreviewBridge1.disconnectFromCore()
+            }
         }
     }
 
@@ -425,6 +433,33 @@ Window {
             exposureReference: apertarControlBridge ? apertarControlBridge.previewExposureReference : ({})
             displayRotation: root.externalMonitorRotation
             previewAspectRatio: root.previewImageAspectRatio
+        }
+
+        // T65 test inset; T66 replaces. The cam1 picture, lower right, only with APERTAR_UI_CAM1_INSET.
+        CameraPreviewItem {
+            id: preview1
+            objectName: "externalPreviewItem1"
+            readonly property bool cam1Available: typeof apertarPreviewBridge1 !== "undefined" && apertarPreviewBridge1 !== null
+            readonly property real frameAspect: root.previewImageAspectRatio > 0 ? root.previewImageAspectRatio : (16 / 9)
+            bridge: cam1Available ? apertarPreviewBridge1 : null
+            visible: cam1Available && typeof cam1InsetTest !== "undefined" && cam1InsetTest
+            width: parent.width * 0.28
+            height: width / frameAspect
+            x: parent.width - width - parent.width * 0.03
+            y: parent.height - height - parent.width * 0.03
+            z: 5
+            zoom: 1.0
+            panX: 0.0
+            panY: 0.0
+            displayRotation: root.externalMonitorRotation
+            previewAspectRatio: preview1.frameAspect
+
+            Rectangle {
+                anchors.fill: parent
+                color: "transparent"
+                border.color: "white"
+                border.width: 2
+            }
         }
 
         Rectangle {
