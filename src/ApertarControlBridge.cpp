@@ -616,30 +616,27 @@ bool ApertarControlBridge::applyRawBitDepth(const QString &displayValue)
     return true;
 }
 
-void ApertarControlBridge::applyStoragePreroll()
+bool ApertarControlBridge::applyStoragePreroll()
 {
     // A refusal (running, recording, ...) comes back from Core as an error and is shown through lastError.
-    sendCoreCommand(QStringLiteral("storage_preroll"), {});
+    return sendCoreCommand(QStringLiteral("storage_preroll"), {});
 }
 
-void ApertarControlBridge::applyStoragePrerollAuto(bool on)
+bool ApertarControlBridge::applyStoragePrerollAuto(bool on)
 {
     // No optimistic update: the buffer event/state from Core brings storage_preroll_auto back.
-    sendCoreCommand(QStringLiteral("set_storage_preroll"), {
+    return sendCoreCommand(QStringLiteral("set_storage_preroll"), {
         { QStringLiteral("value"), on ? QStringLiteral("on") : QStringLiteral("off") }
     });
 }
 
-void ApertarControlBridge::applyClipNameTemplate(const QString &value)
+bool ApertarControlBridge::applyClipNameTemplate(const QString &value)
 {
     // Core corrects the template (appends _{clip} if missing); its reply carries the stored template
-    // and example, applied here. A refusal (recording) comes back as an error through lastError.
-    QJsonObject reply;
-    if (sendCoreCommand(QStringLiteral("set_clip_name_template"), {
-            { QStringLiteral("value"), value }
-        }, &reply)) {
-        applyClipNameState(reply);
-    }
+    // and example, which applyCoreState applies. A refusal (recording) comes back as an error through lastError.
+    return sendCoreCommand(QStringLiteral("set_clip_name_template"), {
+        { QStringLiteral("value"), value }
+    });
 }
 
 void ApertarControlBridge::requestClipNamePreview(const QString &value)
@@ -684,21 +681,16 @@ void ApertarControlBridge::applyClipNameState(const QJsonObject &state)
         emit clipNameChanged();
 }
 
-void ApertarControlBridge::applyBufferMode(const QString &value)
+bool ApertarControlBridge::applyBufferMode(const QString &value)
 {
     if (value != QStringLiteral("frames") && value != QStringLiteral("ram")) {
         setLastError(QStringLiteral("Invalid write buffer mode."));
-        return;
+        return false;
     }
-    if (!sendCoreCommand(QStringLiteral("set_buffer_mode"), {
-            { QStringLiteral("value"), value }
-        })) {
-        return;
-    }
-    if (m_bufferSetting != value) {
-        m_bufferSetting = value;
-        emit bufferSettingChanged();
-    }
+    // The reply carries buffer_setting, which applyCoreState applies.
+    return sendCoreCommand(QStringLiteral("set_buffer_mode"), {
+        { QStringLiteral("value"), value }
+    });
 }
 
 void ApertarControlBridge::applyFramesPerFolder(int value)
@@ -746,17 +738,12 @@ bool ApertarControlBridge::applyClearHdr(bool enabled)
     return true;
 }
 
-void ApertarControlBridge::applyCdngLog(bool on)
+bool ApertarControlBridge::applyCdngLog(bool on)
 {
-    if (!sendCoreCommand(QStringLiteral("set_cdng_log"), {
-            { QStringLiteral("value"), on ? QStringLiteral("auto") : QStringLiteral("off") }
-        })) {
-        return;
-    }
-    if (m_cdngLogOn != on) {
-        m_cdngLogOn = on;
-        emit cdngLogChanged();
-    }
+    // The reply carries cdng_log, which applyCoreState applies.
+    return sendCoreCommand(QStringLiteral("set_cdng_log"), {
+        { QStringLiteral("value"), on ? QStringLiteral("auto") : QStringLiteral("off") }
+    });
 }
 
 bool ApertarControlBridge::applyH264Resolution(const QString &displayValue)

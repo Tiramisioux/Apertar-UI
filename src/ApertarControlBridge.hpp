@@ -241,15 +241,15 @@ public:
     Q_INVOKABLE bool applyCdngCompression(const QString &value);
     Q_INVOKABLE bool applyTuningFile(const QString &path);
     Q_INVOKABLE bool applyRawBitDepth(const QString &displayValue);
-    Q_INVOKABLE void applyBufferMode(const QString &value);
+    Q_INVOKABLE bool applyBufferMode(const QString &value);
     Q_INVOKABLE void applyFramesPerFolder(int value);
     Q_INVOKABLE void applyClipMerge(bool enabled);
-    Q_INVOKABLE void applyStoragePreroll();
-    Q_INVOKABLE void applyStoragePrerollAuto(bool on);
-    Q_INVOKABLE void applyClipNameTemplate(const QString &value);
+    Q_INVOKABLE bool applyStoragePreroll();
+    Q_INVOKABLE bool applyStoragePrerollAuto(bool on);
+    Q_INVOKABLE bool applyClipNameTemplate(const QString &value);
     Q_INVOKABLE void requestClipNamePreview(const QString &value);
     Q_INVOKABLE bool applyClearHdr(bool enabled);
-    Q_INVOKABLE void applyCdngLog(bool on);
+    Q_INVOKABLE bool applyCdngLog(bool on);
     Q_INVOKABLE bool applyH264Resolution(const QString &displayValue);
     // target: "ui" (what the screens show), "files" (the clips and the audio) or "both"
     Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue, const QString &target);
