@@ -521,12 +521,15 @@ Item {
     readonly property var builtInWbSteps: [2500, 2800, 3000, 3200, 3400, 3600, 4000, 4500, 4800, 5000, 5200, 5400, 5600, 5800, 6000, 6500, 7000, 7500, 8000]
     // isoMax is Core's ISO ceiling for the current mode (Clear HDR, lossless cDNG), 0 = none:
     // values above it greyed, the ceiling added in green when not in the list; no Auto in Clear
-    // HDR; with auto on, Lock freezes the gain in use.
+    // HDR; with auto on, Lock freezes the gain in use. Without iso_max, lossless stops at 800
+    // without Auto, as the fixed list did.
     readonly property var isoOptions: {
-        const maximum = root.controlBridge ? root.controlBridge.isoMax : (root.losslessIsoLimitedMode ? 1600 : 0)
+        const coreMaximum = root.controlBridge ? root.controlBridge.isoMax : 0
+        const losslessFallback = !(coreMaximum > 0) && root.losslessIsoLimitedMode
+        const maximum = coreMaximum > 0 ? coreMaximum : (losslessFallback ? 800 : 0)
         const entries = root.cappedValueEntries(root.valueSteps(settingsState ? settingsState.isoSteps : [], root.builtInIsoSteps),
                                                 maximum, v => String(Math.round(v)))
-        if (root.clearHdrActive)
+        if (root.clearHdrActive || losslessFallback)
             return entries
         return (root.iso === "Auto" ? ["Auto", "Lock"] : ["Auto"]).concat(entries)
     }
@@ -817,9 +820,8 @@ function maximumSupportedFpsForResolution(resolutionValue) {
 
     if (root.imx585Detected) {
         var imx585Max = 60.0
-        // Clear HDR 16-bit stops at 25, as in Core's tableMaximumFpsForResolution().
         if (resolutionValue === "3856x2180" || resolutionValue === "3840x2160")
-            imx585Max = root.clearHdrActive && root.rawBitDepthValue === "16-bit" ? 25.0 : 30.0
+            imx585Max = 30.0
         else if (resolutionValue === "3840x2024" ||
                  resolutionValue === "3840x2076" ||
                  resolutionValue === "3840x1920" ||
@@ -909,9 +911,9 @@ function fpsCeiling() {
         var normalizedResolution = root.normalizedResolutionForCurrentSensor(root.resolution)
         max = Math.min(max, root.imx477MaximumUncompressedFpsForResolution(normalizedResolution))
     }
-    if (root.losslessImx585Mode) {
-        // Core's fps_max carries the IMX585 lossless ceiling (the mode's own maximum); no fixed cap here
-    } else if (root.losslessFourKMode)
+    if (root.losslessImx585Mode)
+        max = Math.min(max, 30.0)
+    else if (root.losslessFourKMode)
         max = Math.min(max, root.isApproximatelyFourThree(root.resolution) ? 24.0 : 30.0)
     else if (root.losslessTwoKMode)
         max = Math.min(max, 60.0)
