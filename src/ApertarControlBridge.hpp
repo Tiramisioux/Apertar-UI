@@ -523,6 +523,15 @@ private:
     bool m_fpsSpeedRamp = false; // Core's fps_speed_ramp (T31): FPS may change during a raw take
     bool m_soundRecording = false; // a sound-only take: recording, but not the camera
     bool m_fpsSpeedRampKeepExposure = false;
+    // Kept only for the touch preset (cameraPresetSettings), as m_lossyDngRatio; defaults are Core's.
+    bool m_fpsSpeedRampStretchAudio = true;
+    bool m_fpsSpeedRampReturn = false;
+    bool m_fpsPhaseLock = false;
+    double m_conformFps = 25.0; // the project's timeline rate (Core's conform_fps)
+    int m_hdrThresholdHigh = 4095;
+    int m_hdrThresholdLow = 0;
+    int m_hdrBlend = 5;
+    int m_hdrGainAdder = 1;
     bool m_isoAutoAfterClearHdr = false;
     bool m_whiteBalanceAutoAfterClearHdr = false;
     int m_isoMax = 0;

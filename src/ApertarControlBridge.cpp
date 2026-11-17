@@ -1276,6 +1276,21 @@ QJsonObject ApertarControlBridge::cameraPresetSettings() const
     QJsonObject result;
     result.insert("cameraFps", m_fps);
     result.insert("cameraIso", m_iso);
+    // Same keys and value words as Core's buildCurrentPresetPayload, so both preset writers carry the same set.
+    result.insert("cameraFpsSpeedRamp", m_fpsSpeedRamp);
+    result.insert("cameraFpsSpeedRampShutter", m_fpsSpeedRampKeepExposure ? QStringLiteral("exposure") : QStringLiteral("angle"));
+    result.insert("cameraFpsSpeedRampAudio", m_fpsSpeedRampStretchAudio ? QStringLiteral("stretch") : QStringLiteral("real"));
+    result.insert("cameraFpsSpeedRampAfter", m_fpsSpeedRampReturn ? QStringLiteral("return") : QStringLiteral("stay"));
+    if (!m_clipNameTemplate.isEmpty())
+        result.insert("cameraClipNameTemplate", m_clipNameTemplate);
+    result.insert("cameraFpsPhaseLock", m_fpsPhaseLock);
+    result.insert("cameraTimecodeMode", parseTimecodeModeValue(m_fileTimecodeMode));
+    result.insert("cameraConformFps", m_conformFps);
+    result.insert("cameraClearHdr", m_clearHdr);
+    result.insert("cameraHdrThresholdHigh", m_hdrThresholdHigh);
+    result.insert("cameraHdrThresholdLow", m_hdrThresholdLow);
+    result.insert("cameraHdrBlend", m_hdrBlend);
+    result.insert("cameraHdrGainAdder", m_hdrGainAdder);
     result.insert("cameraExposureCompensation", m_exposureCompensation);
     result.insert("cameraExposureMetering", m_exposureMetering);
     result.insert("cameraShutterAngle", m_shutterAngle);
@@ -1290,6 +1305,7 @@ QJsonObject ApertarControlBridge::cameraPresetSettings() const
     const bool lossy = isLossyCdngCompressionValue(m_cdngCompression) && m_recordingFormat == "cDNG";
     result.insert("cameraRecordingFormat", lossy ? QStringLiteral("lossydng") : parseRecordingFormatValue(m_recordingFormat));
     result.insert("cameraCdngCompression", lossy ? QStringLiteral("none") : m_cdngCompression);
+    result.insert("cameraCdngLog", m_cdngLogOn ? QStringLiteral("auto") : QStringLiteral("off"));
     result.insert("cameraLossyDngRatio", m_lossyDngRatio);
     result.insert("cameraProresProfile", m_proresProfile);
     result.insert("cameraProresColorProfile", m_proresColorProfile);
@@ -1715,6 +1731,22 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         m_whiteBalanceAutoAfterClearHdr = state.value(QStringLiteral("wb_auto_after_clear_hdr")).toBool(m_whiteBalanceAutoAfterClearHdr);
     if (state.contains(QStringLiteral("fps_speed_ramp_keep_exposure")))
         m_fpsSpeedRampKeepExposure = state.value(QStringLiteral("fps_speed_ramp_keep_exposure")).toBool(m_fpsSpeedRampKeepExposure);
+    if (state.contains(QStringLiteral("fps_speed_ramp_stretch_audio")))
+        m_fpsSpeedRampStretchAudio = state.value(QStringLiteral("fps_speed_ramp_stretch_audio")).toBool(m_fpsSpeedRampStretchAudio);
+    if (state.contains(QStringLiteral("fps_speed_ramp_after")))
+        m_fpsSpeedRampReturn = state.value(QStringLiteral("fps_speed_ramp_after")).toString() == QStringLiteral("return");
+    if (state.contains(QStringLiteral("fps_phase_lock")))
+        m_fpsPhaseLock = state.value(QStringLiteral("fps_phase_lock")).toBool(m_fpsPhaseLock);
+    if (state.contains(QStringLiteral("conform_fps")))
+        m_conformFps = state.value(QStringLiteral("conform_fps")).toDouble(m_conformFps);
+    if (state.contains(QStringLiteral("hdr_threshold_high")))
+        m_hdrThresholdHigh = state.value(QStringLiteral("hdr_threshold_high")).toInt(m_hdrThresholdHigh);
+    if (state.contains(QStringLiteral("hdr_threshold_low")))
+        m_hdrThresholdLow = state.value(QStringLiteral("hdr_threshold_low")).toInt(m_hdrThresholdLow);
+    if (state.contains(QStringLiteral("hdr_blend")))
+        m_hdrBlend = state.value(QStringLiteral("hdr_blend")).toInt(m_hdrBlend);
+    if (state.contains(QStringLiteral("hdr_gain_adder")))
+        m_hdrGainAdder = state.value(QStringLiteral("hdr_gain_adder")).toInt(m_hdrGainAdder);
     {
         const int isoActual = state.value(QStringLiteral("iso_actual")).toInt(0);
         const QString isoInUse = !m_isoAuto ? QString() : (isoActual > 0 ? QString::number(isoActual) : m_isoInUse);
