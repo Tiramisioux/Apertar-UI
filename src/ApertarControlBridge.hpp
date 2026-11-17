@@ -538,7 +538,6 @@ private:
     int m_recordingDroppedFrames = 0; // the take's dropped frames, all kinds (Core recording_dropped_frames)
     int m_controlsErrors = 0;
     int m_controlsWarnings = 0;
-    void setControlsStatus(const QJsonObject &object, const QString &errorsKey, const QString &warningsKey);
     bool m_standby = false;
     QString m_coreMediaState;
     bool m_coreMediaAlive = true;

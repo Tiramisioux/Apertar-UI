@@ -1345,17 +1345,9 @@ void ApertarControlBridge::applyCoreMessage(const QJsonObject &message)
         return;
     }
     if (event == QStringLiteral("standby") || event == QStringLiteral("still_exposure") ||
-        event == QStringLiteral("timelapse_progress") || event == QStringLiteral("media_write_state")) {
+        event == QStringLiteral("timelapse_progress") || event == QStringLiteral("media_write_state") ||
+        event == QStringLiteral("controls") || event == QStringLiteral("media")) {
         applyCoreState(message);
-        return;
-    }
-    if (event == QStringLiteral("controls")) {
-        setControlsStatus(message, QStringLiteral("errors"), QStringLiteral("warnings"));
-        return;
-    }
-    if (event == QStringLiteral("media")) {
-        setCoreMediaState(message.value(QStringLiteral("state")).toString(),
-                          message.value(QStringLiteral("mounted")).toBool(true));
         return;
     }
     if (event == QStringLiteral("audio_level")) {
@@ -1443,19 +1435,6 @@ void ApertarControlBridge::setCoreMediaState(const QString &state, bool alive)
     m_coreMediaState = state;
     m_coreMediaAlive = alive;
     emit coreMediaStateChanged(state, alive);
-}
-
-void ApertarControlBridge::setControlsStatus(const QJsonObject &object, const QString &errorsKey, const QString &warningsKey)
-{
-    if (!object.contains(errorsKey))
-        return;
-    const int errors = object.value(errorsKey).toInt(0);
-    const int warnings = object.value(warningsKey).toInt(0);
-    if (errors == m_controlsErrors && warnings == m_controlsWarnings)
-        return;
-    m_controlsErrors = errors;
-    m_controlsWarnings = warnings;
-    emit controlsStatusChanged();
 }
 
 void ApertarControlBridge::applyCam1State(const QJsonObject &state)
@@ -1561,7 +1540,15 @@ void ApertarControlBridge::clearCam1State()
 
 void ApertarControlBridge::applyCoreState(const QJsonObject &state)
 {
-    setControlsStatus(state, QStringLiteral("controls_errors"), QStringLiteral("controls_warnings"));
+    if (state.contains(QStringLiteral("controls_errors"))) {
+        const int errors = state.value(QStringLiteral("controls_errors")).toInt(0);
+        const int warnings = state.value(QStringLiteral("controls_warnings")).toInt(0);
+        if (m_controlsErrors != errors || m_controlsWarnings != warnings) {
+            m_controlsErrors = errors;
+            m_controlsWarnings = warnings;
+            emit controlsStatusChanged();
+        }
+    }
     if (state.contains(QStringLiteral("media_state")))
         setCoreMediaState(state.value(QStringLiteral("media_state")).toString(),
                           state.value(QStringLiteral("media_alive")).toBool(true));
