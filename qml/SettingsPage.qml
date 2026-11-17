@@ -3988,7 +3988,7 @@ Item {
 
             InlineDropdownField {
                 width: parent.width
-                label: "UI timecode"
+                label: "Mode"
                 value: root.settingsState ? root.settingsState.timecodeMode : "Free Run"
                 displayValue: root.timecodeDisplayName(value)
                 options: root.timecodeChoices
@@ -4007,15 +4007,22 @@ Item {
 
             InlineDropdownField {
                 width: parent.width
-                label: "File timecode"
-                value: (typeof apertarControlBridge !== "undefined" && apertarControlBridge) ? apertarControlBridge.fileTimecodeMode : "Free Run"
-                displayValue: root.timecodeDisplayName(value)
-                options: root.timecodeChoices
+                label: "Files"
+                value: root.settingsState && root.settingsState.fileTimecodeSeparate
+                       && typeof apertarControlBridge !== "undefined" && apertarControlBridge
+                       ? apertarControlBridge.fileTimecodeMode : "Same as Mode"
+                displayValue: value === "Same as Mode" ? value : root.timecodeDisplayName(value)
+                options: ["Same as Mode"].concat(root.timecodeChoices)
                 openUpwards: true
                 popupParent: dropdownOverlay
                 dropdownController: sharedDropdownController
                 onValueSelected: function(v) {
-                    if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
+                    if (typeof apertarControlBridge === "undefined" || !apertarControlBridge)
+                        return
+                    // A fixed value sets the files apart; Same as Mode sends no target, so Core sets both again.
+                    if (v === "Same as Mode")
+                        apertarControlBridge.applyTimecodeMode(root.settingsState ? root.settingsState.timecodeMode : "Free Run")
+                    else
                         apertarControlBridge.applyFileTimecodeMode(v)
                 }
             }
