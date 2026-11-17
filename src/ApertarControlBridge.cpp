@@ -1628,8 +1628,10 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
     }
 
     const bool previousAutoExposure = autoExposureEnabled();
-    if (state.contains(QStringLiteral("iso_auto")))
+    if (state.contains(QStringLiteral("iso_auto"))) {
         m_isoAuto = state.value(QStringLiteral("iso_auto")).toBool(m_isoAuto);
+        updateRefreshTimer();
+    }
 
     if (state.contains(QStringLiteral("shutter_auto")))
         m_shutterAuto = state.value(QStringLiteral("shutter_auto")).toBool(m_shutterAuto);
@@ -1667,8 +1669,10 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         emit exposureMeteringChanged();
     }
 
-    if (state.contains(QStringLiteral("wb_auto")))
+    if (state.contains(QStringLiteral("wb_auto"))) {
         m_whiteBalanceAuto = state.value(QStringLiteral("wb_auto")).toBool(m_whiteBalanceAuto);
+        updateRefreshTimer();
+    }
 
     if (state.contains(QStringLiteral("wb_available"))) {
         const bool available = state.value(QStringLiteral("wb_available")).toBool();
@@ -1744,7 +1748,6 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
             m_shutterSetByCamera = shutterSet;
             emit cameraSetValuesChanged();
         }
-        updateRefreshTimer();
     }
 
     if (state.contains(QStringLiteral("width")) && state.contains(QStringLiteral("height"))) {
