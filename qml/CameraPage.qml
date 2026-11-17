@@ -1840,8 +1840,10 @@ function toggleTimecodeMode() {
     var nextMode = root.timecodeMode === "Free Run" ? "Rec Run" : "Free Run"
     if (root.settingsState)
         root.settingsState.timecodeMode = nextMode
+    if (root.settingsState && root.settingsState.fileTimecodeSeparate)
+        return
     if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
-        apertarControlBridge.applyTimecodeMode(nextMode, "ui")
+        apertarControlBridge.applyTimecodeMode(nextMode)
 }
 
 function falseColorModeToInt(mode) {

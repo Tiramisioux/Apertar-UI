@@ -3998,8 +3998,10 @@ Item {
                 onValueSelected: function(v) {
                     if (root.settingsState)
                         root.settingsState.timecodeMode = v
+                    if (root.settingsState && root.settingsState.fileTimecodeSeparate)
+                        return
                     if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
-                        apertarControlBridge.applyTimecodeMode(v, "ui")
+                        apertarControlBridge.applyTimecodeMode(v)
                 }
             }
 
@@ -4014,7 +4016,7 @@ Item {
                 dropdownController: sharedDropdownController
                 onValueSelected: function(v) {
                     if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
-                        apertarControlBridge.applyTimecodeMode(v, "files")
+                        apertarControlBridge.applyFileTimecodeMode(v)
                 }
             }
         }

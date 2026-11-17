@@ -767,27 +767,33 @@ bool ApertarControlBridge::applyH264Resolution(const QString &displayValue)
     return true;
 }
 
-bool ApertarControlBridge::applyTimecodeMode(const QString &displayValue, const QString &target)
+bool ApertarControlBridge::applyTimecodeMode(const QString &displayValue)
 {
     const QString normalized = parseTimecodeModeValue(displayValue);
-    if (normalized.isEmpty() || (target != QLatin1String("ui") && target != QLatin1String("files") && target != QLatin1String("both"))) {
+    if (normalized.isEmpty()) {
         setLastError(QStringLiteral("Invalid timecode mode value."));
         return false;
     }
 
-    if (!sendCoreCommand(QStringLiteral("set_timecode_mode"),
-                         { { QStringLiteral("value"), normalized }, { QStringLiteral("target"), target } }))
+    if (!sendCoreCommand(QStringLiteral("set_timecode_mode"), { { QStringLiteral("value"), normalized } }))
         return false;
 
-    if (target != QLatin1String("files")) {
-        m_settings.setValue(QStringLiteral("timecodeMode"), displayValue);
-        m_settings.sync();
-    }
-    if (target != QLatin1String("ui") && m_fileTimecodeMode != displayValue) {
-        m_fileTimecodeMode = displayValue;
-        emit fileTimecodeModeChanged();
-    }
+    m_settings.setValue(QStringLiteral("timecodeMode"), displayValue);
+    m_settings.sync();
     return true;
+}
+
+bool ApertarControlBridge::applyFileTimecodeMode(const QString &displayValue)
+{
+    const QString normalized = parseTimecodeModeValue(displayValue);
+    if (normalized.isEmpty()) {
+        setLastError(QStringLiteral("Invalid timecode mode value."));
+        return false;
+    }
+
+    // Only the clips' timecode; Core records in UI.conf that it is set apart (fileTimecodeSeparate).
+    return sendCoreCommand(QStringLiteral("set_timecode_mode"),
+                           { { QStringLiteral("value"), normalized }, { QStringLiteral("target"), QStringLiteral("files") } });
 }
 
 bool ApertarControlBridge::applyAutofocusMode(const QString &displayValue)
@@ -1325,7 +1331,8 @@ bool ApertarControlBridge::applyCameraPreset(const QJsonObject &settings)
 {
     QJsonObject capture;
     for (auto it = settings.begin(); it != settings.end(); ++it)
-        if (it.key().startsWith("camera") || it.key() == "timecodeMode" || it.key() == "photoBracketingEv")
+        if (it.key().startsWith("camera") || it.key() == "timecodeMode" || it.key() == "fileTimecodeSeparate" ||
+            it.key() == "photoBracketingEv")
             capture.insert(it.key(), it.value());
     if (capture.isEmpty()) return true;
     QJsonObject reply;
@@ -1848,10 +1855,15 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         const QString displayValue = normalized == QStringLiteral("rec_run")
             ? QStringLiteral("Rec Run")
             : QStringLiteral("Free Run");
-        // Core's mode is the files' timecode; the UI's own copy (timecodeMode) is set apart.
         if (m_fileTimecodeMode != displayValue) {
             m_fileTimecodeMode = displayValue;
             emit fileTimecodeModeChanged();
+        }
+        // The screens follow Core's mode unless the file timecode is set apart.
+        m_settings.sync();
+        if (!m_settings.value(QStringLiteral("fileTimecodeSeparate"), false).toBool()) {
+            m_settings.setValue(QStringLiteral("timecodeMode"), displayValue);
+            m_settings.sync();
         }
     }
 

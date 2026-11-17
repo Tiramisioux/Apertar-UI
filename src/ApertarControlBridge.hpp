@@ -251,8 +251,8 @@ public:
     Q_INVOKABLE bool applyClearHdr(bool enabled);
     Q_INVOKABLE bool applyCdngLog(const QString &value);
     Q_INVOKABLE bool applyH264Resolution(const QString &displayValue);
-    // target: "ui" (what the screens show), "files" (the clips and the audio) or "both"
-    Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue, const QString &target);
+    Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue);
+    Q_INVOKABLE bool applyFileTimecodeMode(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusMode(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusRange(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusSpeed(const QString &displayValue);
