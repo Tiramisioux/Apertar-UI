@@ -3458,32 +3458,19 @@ Item {
                 visible: (root.cdngRecordFormat || root.recordFormat === "MLV")
                          && !!apertarControlBridge && apertarControlBridge.bufferSetting !== ""
 
-                Text {
+                InlineDropdownField {
                     width: parent.width
-                    text: "Write Buffer"
-                    color: "white"
-                    font.pixelSize: 14
-                }
-
-                Row {
-                    width: parent.width
-                    spacing: 12
-
-                    ActionTile {
-                        width: (parent.width - 12) / 2
-                        label: "Frames"
-                        tone: apertarControlBridge.bufferSetting === "frames" ? "accent" : "default"
-                        actionEnabled: !apertarControlBridge.recording
-                        onClicked: apertarControlBridge.applyBufferMode("frames")
-                    }
-
-                    ActionTile {
-                        width: (parent.width - 12) / 2
-                        label: "RAM"
-                        tone: apertarControlBridge.bufferSetting === "ram" ? "accent" : "default"
-                        actionEnabled: !apertarControlBridge.recording
-                        onClicked: apertarControlBridge.applyBufferMode("ram")
-                    }
+                    label: "Write Buffer"
+                    value: apertarControlBridge ? apertarControlBridge.bufferSetting : "frames"
+                    displayValue: value === "ram" ? "RAM" : "Frames"
+                    options: [
+                        { value: "frames", label: "Frames" },
+                        { value: "ram", label: "RAM" }
+                    ]
+                    fieldEnabled: apertarControlBridge && !apertarControlBridge.recording
+                    popupParent: dropdownOverlay
+                    dropdownController: sharedDropdownController
+                    onValueSelected: function(v) { apertarControlBridge.applyBufferMode(v) }
                 }
 
                 Text {
