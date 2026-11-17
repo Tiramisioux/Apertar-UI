@@ -371,6 +371,7 @@ SettingsBridge::SettingsBridge(QObject *parent)
     m_recordingRedTimecodeEnabled = m_settings.value("recordingRedTimecodeEnabled", true).toBool();
     m_audioRecordedOutlineEnabled = m_settings.value("audioRecordedOutlineEnabled", false).toBool();
     m_timecodeMode = m_settings.value("timecodeMode", "Free Run").toString();
+    m_fileTimecodeSeparate = m_settings.value("fileTimecodeSeparate", false).toBool();
     m_photoModeEnabled = m_settings.value("photoModeEnabled", false).toBool();
     m_photoLongExposureEnabled = m_settings.value("photoLongExposureEnabled", false).toBool();
     m_photoBracketingEnabled = m_settings.value("photoBracketingEnabled", false).toBool();
@@ -595,6 +596,7 @@ void SettingsBridge::pollExternalSettings()
     }
     setTimecodeMode(timecodeMode);
     reloadDualSensorSettings();
+    setFileTimecodeSeparate(m_settings.value(QStringLiteral("fileTimecodeSeparate"), m_fileTimecodeSeparate).toBool());
 
     m_settings.sync();
     updateSettingsFileState();
@@ -1306,6 +1308,23 @@ void SettingsBridge::setTimecodeMode(const QString &value)
     m_settings.sync();
     updateSettingsFileState();
     emit timecodeModeChanged();
+}
+
+bool SettingsBridge::fileTimecodeSeparate() const
+{
+    return m_fileTimecodeSeparate;
+}
+
+void SettingsBridge::setFileTimecodeSeparate(bool value)
+{
+    if (m_fileTimecodeSeparate == value)
+        return;
+
+    m_fileTimecodeSeparate = value;
+    if (!m_externalSettingsSyncing) m_settings.setValue("fileTimecodeSeparate", value);
+    m_settings.sync();
+    updateSettingsFileState();
+    emit fileTimecodeSeparateChanged();
 }
 
 bool SettingsBridge::photoModeEnabled() const
@@ -2248,6 +2267,7 @@ QJsonObject SettingsBridge::serializeCurrentSettings() const
     settingsObject.insert(QStringLiteral("recordingRedTimecodeEnabled"), m_recordingRedTimecodeEnabled);
     settingsObject.insert(QStringLiteral("audioRecordedOutlineEnabled"), m_audioRecordedOutlineEnabled);
     settingsObject.insert(QStringLiteral("timecodeMode"), m_timecodeMode);
+    settingsObject.insert(QStringLiteral("fileTimecodeSeparate"), m_fileTimecodeSeparate);
     settingsObject.insert(QStringLiteral("photoModeEnabled"), m_photoModeEnabled);
     settingsObject.insert(QStringLiteral("photoLongExposureEnabled"), m_photoLongExposureEnabled);
     settingsObject.insert(QStringLiteral("photoBracketingEnabled"), m_photoBracketingEnabled);
@@ -2340,6 +2360,7 @@ bool SettingsBridge::applySettingsObject(const QJsonObject &settingsObject, QStr
     setRecordingRedTimecodeEnabled(boolValue(settingsObject, "recordingRedTimecodeEnabled", m_recordingRedTimecodeEnabled));
     setAudioRecordedOutlineEnabled(boolValue(settingsObject, "audioRecordedOutlineEnabled", m_audioRecordedOutlineEnabled));
     setTimecodeMode(stringValue(settingsObject, "timecodeMode", m_timecodeMode));
+    setFileTimecodeSeparate(boolValue(settingsObject, "fileTimecodeSeparate", m_fileTimecodeSeparate));
     setPhotoModeEnabled(boolValue(settingsObject, "photoModeEnabled", m_photoModeEnabled));
     setPhotoLongExposureEnabled(boolValue(settingsObject, "photoLongExposureEnabled", m_photoLongExposureEnabled));
     setPhotoBracketingEnabled(boolValue(settingsObject, "photoBracketingEnabled", m_photoBracketingEnabled));
