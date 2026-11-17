@@ -482,7 +482,7 @@ private:
     bool m_recordingFrameEnabled = false;
     bool m_frameBufferBarEnabled = false;
     bool m_recordingRedTimecodeEnabled = true;
-    bool m_audioRecordedOutlineEnabled = true;
+    bool m_audioRecordedOutlineEnabled = false;
     QString m_timecodeMode = "Free Run";
     bool m_photoModeEnabled = false;
     bool m_photoLongExposureEnabled = false;

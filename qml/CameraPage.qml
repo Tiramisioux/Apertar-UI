@@ -3894,7 +3894,7 @@ TextMetrics {
                     large: root.standardLandscapeLayout
                     muted: root.inputVolumeLevel <= 0
                     soundRecorded: root.recording && root.recordAudioEnabled && root.audioInputAvailable
-                          && (!settingsState || settingsState.audioRecordedOutlineEnabled)
+                          && !!settingsState && settingsState.audioRecordedOutlineEnabled
                     inputLevel: (typeof audioMeterBridge !== "undefined" && audioMeterBridge)
                                 ? audioMeterBridge.inputLevel
                                 : 0
@@ -4091,7 +4091,7 @@ TextMetrics {
                   - centerStack.dateTimeGap)
             muted: root.inputVolumeLevel <= 0
             soundRecorded: root.recording && root.recordAudioEnabled && root.audioInputAvailable
-                          && (!settingsState || settingsState.audioRecordedOutlineEnabled)
+                          && !!settingsState && settingsState.audioRecordedOutlineEnabled
             inputLevel: (typeof audioMeterBridge !== "undefined" && audioMeterBridge)
                         ? audioMeterBridge.inputLevel
                         : 0

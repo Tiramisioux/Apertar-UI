@@ -991,7 +991,7 @@ Window {
                 color: "#38000000"
                 border.width: 1
                 border.color: (root.recordingActive && root.recordAudioEnabled && root.audioInputAvailable
-                               && (!settingsBridge || settingsBridge.audioRecordedOutlineEnabled)) ? "#73fb2c36"
+                               && !!settingsBridge && settingsBridge.audioRecordedOutlineEnabled) ? "#73fb2c36"
                               : (root.inputVolumeLevel <= 0 ? "#664a2f2f" : "#26ffffff")
                 layer.enabled: visible
                 layer.smooth: true

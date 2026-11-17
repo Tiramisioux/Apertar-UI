@@ -368,7 +368,7 @@ SettingsBridge::SettingsBridge(QObject *parent)
     m_recordingFrameEnabled = m_settings.value("recordingFrameEnabled", false).toBool();
     m_frameBufferBarEnabled = m_settings.value("frameBufferBarEnabled", false).toBool();
     m_recordingRedTimecodeEnabled = m_settings.value("recordingRedTimecodeEnabled", true).toBool();
-    m_audioRecordedOutlineEnabled = m_settings.value("audioRecordedOutlineEnabled", true).toBool();
+    m_audioRecordedOutlineEnabled = m_settings.value("audioRecordedOutlineEnabled", false).toBool();
     m_timecodeMode = m_settings.value("timecodeMode", "Free Run").toString();
     m_photoModeEnabled = m_settings.value("photoModeEnabled", false).toBool();
     m_photoLongExposureEnabled = m_settings.value("photoLongExposureEnabled", false).toBool();

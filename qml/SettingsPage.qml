@@ -2990,7 +2990,7 @@ Item {
             dropdownController: sharedDropdownController
             title: "Audio Recording Outline"
             description: "A faint red outline on the audio meter when sound is recorded with the clips."
-            enabled: root.settingsState ? root.settingsState.audioRecordedOutlineEnabled : true
+            enabled: root.settingsState ? root.settingsState.audioRecordedOutlineEnabled : false
             onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
             onToggleRequested: {
                 if (root.settingsState)
