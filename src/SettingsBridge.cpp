@@ -1198,6 +1198,11 @@ void SettingsBridge::setRecordingRedTimecodeEnabled(bool value)
     emit recordingRedTimecodeEnabledChanged();
 }
 
+bool SettingsBridge::recordingRedTimecodeSet() const
+{
+    return m_settings.contains(QStringLiteral("recordingRedTimecodeEnabled"));
+}
+
 bool SettingsBridge::audioRecordedOutlineEnabled() const
 {
     return m_audioRecordedOutlineEnabled;

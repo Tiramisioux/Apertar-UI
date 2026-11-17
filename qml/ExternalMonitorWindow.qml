@@ -1205,7 +1205,7 @@ Window {
                 Text {
                     id: timecodeText
                     text: root.timecode
-                    color: root.recordingActive && (!settingsBridge || settingsBridge.recordingRedTimecodeEnabled) ? "#ff4d4d" : "white"
+                    color: root.recordingActive && !!settingsBridge && settingsBridge.recordingRedTimecodeSet && settingsBridge.recordingRedTimecodeEnabled ? "#ff4d4d" : "white"
                     font.family: interBold.font.family
                     font.pixelSize: 42
                     style: Text.Outline

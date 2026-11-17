@@ -53,6 +53,8 @@ class SettingsBridge : public QObject
     Q_PROPERTY(bool recordingFrameEnabled READ recordingFrameEnabled WRITE setRecordingFrameEnabled NOTIFY recordingFrameEnabledChanged)
     Q_PROPERTY(bool frameBufferBarEnabled READ frameBufferBarEnabled WRITE setFrameBufferBarEnabled NOTIFY frameBufferBarEnabledChanged)
     Q_PROPERTY(bool recordingRedTimecodeEnabled READ recordingRedTimecodeEnabled WRITE setRecordingRedTimecodeEnabled NOTIFY recordingRedTimecodeEnabledChanged)
+    // True once recordingRedTimecodeEnabled is stored in UI.conf; until then HDMI keeps the white timecode of 1.6.0.
+    Q_PROPERTY(bool recordingRedTimecodeSet READ recordingRedTimecodeSet NOTIFY recordingRedTimecodeEnabledChanged)
     Q_PROPERTY(bool audioRecordedOutlineEnabled READ audioRecordedOutlineEnabled WRITE setAudioRecordedOutlineEnabled NOTIFY audioRecordedOutlineEnabledChanged)
     Q_PROPERTY(QString timecodeMode READ timecodeMode WRITE setTimecodeMode NOTIFY timecodeModeChanged)
     Q_PROPERTY(bool photoModeEnabled READ photoModeEnabled WRITE setPhotoModeEnabled NOTIFY photoModeEnabledChanged)
@@ -203,6 +205,7 @@ public:
     void setFrameBufferBarEnabled(bool value);
     bool recordingRedTimecodeEnabled() const;
     void setRecordingRedTimecodeEnabled(bool value);
+    bool recordingRedTimecodeSet() const;
     bool audioRecordedOutlineEnabled() const;
     void setAudioRecordedOutlineEnabled(bool value);
 
