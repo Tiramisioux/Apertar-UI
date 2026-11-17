@@ -3284,6 +3284,7 @@ Item {
                 readonly property int activeFieldCount: 3
                                                         + ((root.processedVideoRecordFormat || root.sensorCropControlsAvailable) ? 1 : 0)
                                                         + (root.cdngRecordFormat ? 1 : 0)
+                                                        + (root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable ? 1 : 0)
                 readonly property int activeRowCount: Math.ceil(activeFieldCount / columns)
 
                 width: parent.width
@@ -3419,6 +3420,36 @@ Item {
                     onValueSelected: function(v) { apertarControlBridge.applyCdngCompression(v) }
                 }
 
+                InlineDropdownField {
+                    width: (parent.width - 12) / 2
+                    visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
+                    label: "Log"
+                    value: apertarControlBridge && apertarControlBridge.cdngLogOn ? "auto" : "off"
+                    displayValue: value === "auto" ? "On" : "Off"
+                    options: [
+                        { value: "off", label: "Off" },
+                        { value: "auto", label: "On" }
+                    ]
+                    fieldEnabled: apertarControlBridge && !apertarControlBridge.recording
+                    popupParent: dropdownOverlay
+                    dropdownController: sharedDropdownController
+                    onValueSelected: function(v) { apertarControlBridge.applyCdngLog(v) }
+                }
+
+            }
+
+            Text {
+                width: parent.width
+                visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
+                text: !apertarControlBridge.cdngLogOn ? "Linear storage"
+                      : (apertarControlBridge.cdngLogApplied
+                         ? (apertarControlBridge.cdngLogBits > 0
+                            ? "Stores one step down (" + apertarControlBridge.cdngLogBits + "-bit)"
+                            : "One step down")
+                         : "Not applied: in SDR the sensor chip already compresses the raw stream; Log works in Clear HDR. Files stay linear.")
+                color: "#9aa5b1"
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
             }
 
             Column {
@@ -3461,40 +3492,6 @@ Item {
                           : (apertarControlBridge.bufferMode === "ram" ? "Large RAM buffer in use"
                              : "Takes effect at the next take"
                                + (apertarControlBridge.bufferNote !== "" ? " \u00b7 " + apertarControlBridge.bufferNote : ""))
-                    color: "#9aa5b1"
-                    font.pixelSize: 12
-                    wrapMode: Text.WordWrap
-                }
-            }
-
-            Column {
-                width: parent.width
-                spacing: 8
-                visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
-
-                Text {
-                    width: parent.width
-                    text: "Log"
-                    color: "white"
-                    font.pixelSize: 14
-                }
-
-                ActionTile {
-                    width: (parent.width - 12) / 2
-                    label: apertarControlBridge.cdngLogOn ? "On" : "Off"
-                    tone: apertarControlBridge.cdngLogOn ? "accent" : "default"
-                    actionEnabled: !apertarControlBridge.recording
-                    onClicked: apertarControlBridge.applyCdngLog(!apertarControlBridge.cdngLogOn)
-                }
-
-                Text {
-                    width: parent.width
-                    text: !apertarControlBridge.cdngLogOn ? "Linear storage"
-                          : (apertarControlBridge.cdngLogApplied
-                             ? (apertarControlBridge.cdngLogBits > 0
-                                ? "Stores one step down (" + apertarControlBridge.cdngLogBits + "-bit)"
-                                : "One step down")
-                             : "Not applied: in SDR the sensor chip already compresses the raw stream; Log works in Clear HDR. Files stay linear.")
                     color: "#9aa5b1"
                     font.pixelSize: 12
                     wrapMode: Text.WordWrap

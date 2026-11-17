@@ -249,7 +249,7 @@ public:
     Q_INVOKABLE bool applyClipNameTemplate(const QString &value);
     Q_INVOKABLE void requestClipNamePreview(const QString &value);
     Q_INVOKABLE bool applyClearHdr(bool enabled);
-    Q_INVOKABLE bool applyCdngLog(bool on);
+    Q_INVOKABLE bool applyCdngLog(const QString &value);
     Q_INVOKABLE bool applyH264Resolution(const QString &displayValue);
     // target: "ui" (what the screens show), "files" (the clips and the audio) or "both"
     Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue, const QString &target);

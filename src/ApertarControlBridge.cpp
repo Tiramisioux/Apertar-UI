@@ -738,11 +738,11 @@ bool ApertarControlBridge::applyClearHdr(bool enabled)
     return true;
 }
 
-bool ApertarControlBridge::applyCdngLog(bool on)
+bool ApertarControlBridge::applyCdngLog(const QString &value)
 {
-    // The reply carries cdng_log, which applyCoreState applies.
+    // Core refuses anything but off or auto; the reply carries cdng_log, which applyCoreState applies.
     return sendCoreCommand(QStringLiteral("set_cdng_log"), {
-        { QStringLiteral("value"), on ? QStringLiteral("auto") : QStringLiteral("off") }
+        { QStringLiteral("value"), value }
     });
 }
 
