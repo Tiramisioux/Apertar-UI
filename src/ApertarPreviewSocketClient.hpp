@@ -19,6 +19,8 @@ class ApertarPreviewSocketClient : public QObject
     Q_PROPERTY(bool connected READ connected NOTIFY connectedChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
     Q_PROPERTY(qulonglong frameCounter READ frameCounter NOTIFY frameArrived)
+    // Frames received from Core, counted before the recording fps cap; liveness for the cam1 pane (T65).
+    Q_PROPERTY(qulonglong framesReceived READ framesReceived NOTIFY framesReceivedChanged)
 
 public:
     explicit ApertarPreviewSocketClient(QObject *parent = nullptr);
@@ -27,6 +29,7 @@ public:
     bool connected() const { return m_connected; }
     QString statusText() const { return m_statusText; }
     qulonglong frameCounter() const { return m_lastFrame; }
+    qulonglong framesReceived() const { return m_framesReceived; }
 
     Q_INVOKABLE bool connectToCore(const QString &socketPath = QStringLiteral("/tmp/apertar-core.sock"));
     Q_INVOKABLE void disconnectFromCore();
@@ -40,6 +43,7 @@ signals:
     void connectedChanged();
     void statusTextChanged();
     void frameArrived();
+    void framesReceivedChanged();
     void previewFrameReady();
 
 private slots:
@@ -88,6 +92,7 @@ private:
 
     int m_previewFd = -1;
     uint64_t m_lastFrame = 0;
+    uint64_t m_framesReceived = 0;
     PreviewFrameInfo m_latestFrame;
     std::unordered_map<unsigned int, RegisteredPreviewBuffer> m_registeredPreviewBuffers;
     bool m_loggedPreviewBuffer = false;

@@ -1,5 +1,6 @@
 #include "ApertarControlBridge.hpp"
 
+#include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -700,6 +701,38 @@ void ApertarControlBridge::applyBufferMode(const QString &value)
     }
 }
 
+void ApertarControlBridge::applyFramesPerFolder(int value)
+{
+    // Core takes 0 (one folder) or 100-100000; the tiles send 0 or 5000 (the SSD campaign's value).
+    if (value != 0 && (value < 100 || value > 100000)) {
+        setLastError(QStringLiteral("Invalid frames per folder."));
+        return;
+    }
+    if (!sendCoreCommand(QStringLiteral("set_frames_per_folder"), {
+            { QStringLiteral("value"), QString::number(value) }
+        })) {
+        return;
+    }
+    if (m_framesPerFolder != value) {
+        m_framesPerFolder = value;
+        emit clipSplitChanged();
+    }
+}
+
+void ApertarControlBridge::applyClipMerge(bool enabled)
+{
+    if (!sendCoreCommand(QStringLiteral("set_clip_merge"), {
+            { QStringLiteral("enabled"), enabled ? QStringLiteral("true") : QStringLiteral("false") }
+        })) {
+        return;
+    }
+    if (!m_clipMergeKnown || m_clipMergeEnabled != enabled) {
+        m_clipMergeKnown = true;
+        m_clipMergeEnabled = enabled;
+        emit clipSplitChanged();
+    }
+}
+
 bool ApertarControlBridge::applyClearHdr(bool enabled)
 {
     // Core restarts the camera, forces 4K and settles the bit depth; the settings event brings those back.
@@ -1013,7 +1046,7 @@ void ApertarControlBridge::updateRefreshTimer()
         || !m_connected;
     m_retryTimer.setInterval(needsFastPolling
                              ? kReconnectPollIntervalMs
-                             : (m_isoAuto || m_whiteBalanceAuto ? kLiveValuePollIntervalMs : kSteadyStatePollIntervalMs));
+                             : (m_isoAuto || m_whiteBalanceAuto || m_cam1Present ? kLiveValuePollIntervalMs : kSteadyStatePollIntervalMs));
 }
 
 void ApertarControlBridge::loadPersistedCameraSettings()
@@ -1342,6 +1375,10 @@ void ApertarControlBridge::applyCoreMessage(const QJsonObject &message)
         setAudioInputLevel(message.value(QStringLiteral("input_level")).toInt(0));
         return;
     }
+    if (event == QStringLiteral("clip_merge")) {
+        applyBufferState(message);   // the merge progress and clip_merge_enabled
+        return;
+    }
     if (event == QStringLiteral("buffer")) {
         applyBufferState(message);
         applyRecordingDroppedFrames(message);   // the count rides on the buffer event while a take runs
@@ -1434,6 +1471,107 @@ void ApertarControlBridge::setControlsStatus(const QJsonObject &object, const QS
     emit controlsStatusChanged();
 }
 
+void ApertarControlBridge::applyCam1State(const QJsonObject &state)
+{
+    if (state.contains(QStringLiteral("record_cameras"))) {
+        const QString recordCameras = state.value(QStringLiteral("record_cameras")).toString();
+        if (recordCameras != m_recordCameras) {
+            m_recordCameras = recordCameras;
+            emit recordCamerasChanged();
+        }
+    }
+
+    if (!state.value(QStringLiteral("cam1")).isObject())
+        return;
+    const QJsonObject cam1 = state.value(QStringLiteral("cam1")).toObject();
+
+    const QString cam1State = cam1.value(QStringLiteral("state")).toString();
+    const QString message = cam1.value(QStringLiteral("message")).toString();
+    const int dropped = cam1.value(QStringLiteral("recording_dropped_frames")).toInt(0);
+    const bool locked = cam1.value(QStringLiteral("locked")).toBool(false);
+    const double skewUs = cam1.value(QStringLiteral("skew_us")).toDouble(0.0);
+    // The second sensor's own name tells the kinds apart, never cam0's sensor field.
+    const QString sensor = cam1.value(QStringLiteral("sensor")).toString();
+    const bool sensorMono = cam1.value(QStringLiteral("sensor_mono")).toBool(false);
+
+    const bool becamePresent = !m_cam1Present;
+    const bool stateChanged = becamePresent || cam1State != m_cam1State || sensor != m_cam1Sensor
+        || message != m_cam1Message;
+    const bool fieldsChanged = stateChanged || dropped != m_cam1RecordingDroppedFrames
+        || locked != m_cam1Locked || skewUs != m_cam1SkewUs || sensorMono != m_cam1SensorMono;
+
+    m_cam1Present = true;
+    m_cam1State = cam1State;
+    m_cam1Message = message;
+    m_cam1RecordingDroppedFrames = dropped;
+    m_cam1Locked = locked;
+    m_cam1SkewUs = skewUs;
+    m_cam1Sensor = sensor;
+    m_cam1SensorMono = sensorMono;
+
+    if (stateChanged) {
+        qInfo().noquote() << QStringLiteral("cam1: state %1 sensor %2%3")
+            .arg(cam1State.isEmpty() ? QStringLiteral("unknown") : cam1State,
+                 sensor.isEmpty() ? QStringLiteral("unknown") : sensor,
+                 message.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(message));
+    }
+
+    if (cam1.value(QStringLiteral("settings")).isObject()) {
+        const QJsonObject settingsObject = cam1.value(QStringLiteral("settings")).toObject();
+        const QVariantMap settings = settingsObject.toVariantMap();
+        // Read the resolution the way the primary's own is read above.
+        int width = 0;
+        int height = 0;
+        QString resolution;
+        if (settingsObject.contains(QStringLiteral("width")) && settingsObject.contains(QStringLiteral("height"))) {
+            width = settingsObject.value(QStringLiteral("width")).toInt();
+            height = settingsObject.value(QStringLiteral("height")).toInt();
+        } else if (settingsObject.contains(QStringLiteral("resolution"))) {
+            parseResolutionValue(settingsObject.value(QStringLiteral("resolution")).toString(), &width, &height);
+        }
+        if (width > 0 && height > 0)
+            resolution = formatResolutionValue(width, height);
+        if (!resolution.isEmpty() && resolution != m_cam1Resolution) {
+            m_cam1Resolution = resolution;
+            qInfo().noquote() << QStringLiteral("cam1: resolution %1 (cam0 %2)").arg(resolution, m_resolution);
+        }
+        if (settings != m_cam1Settings) {
+            m_cam1Settings = settings;
+            emit cam1SettingsChanged();
+        }
+    }
+
+    if (becamePresent) {
+        emit cam1PresentChanged();
+        updateRefreshTimer();
+    }
+    if (fieldsChanged)
+        emit cam1Changed();
+}
+
+void ApertarControlBridge::clearCam1State()
+{
+    if (!m_cam1Present)
+        return;
+    m_cam1Present = false;
+    m_cam1State.clear();
+    m_cam1Message.clear();
+    m_cam1RecordingDroppedFrames = 0;
+    m_cam1Locked = false;
+    m_cam1SkewUs = 0.0;
+    m_cam1Sensor.clear();
+    m_cam1SensorMono = false;
+    m_cam1Resolution.clear();
+    const bool hadSettings = !m_cam1Settings.isEmpty();
+    m_cam1Settings.clear();
+    qInfo() << "cam1: gone from state";
+    emit cam1PresentChanged();
+    emit cam1Changed();
+    if (hadSettings)
+        emit cam1SettingsChanged();
+    updateRefreshTimer();
+}
+
 void ApertarControlBridge::applyCoreState(const QJsonObject &state)
 {
     setControlsStatus(state, QStringLiteral("controls_errors"), QStringLiteral("controls_warnings"));
@@ -1455,6 +1593,7 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         }
     }
     applyRecordingDroppedFrames(state);
+    applyCam1State(state);
     if (state.contains(QStringLiteral("recording_error"))) {
         const auto recordingError = state.value(QStringLiteral("recording_error")).toString();
         const bool changed = recordingError != m_lastRecordingError;
@@ -1817,12 +1956,18 @@ void ApertarControlBridge::processEventSocketMessages()
             continue;
 
         const auto message = doc.object();
-        if (m_pendingStateRequestId >= 0 && message.value(QStringLiteral("id")).toInt(-1) == m_pendingStateRequestId) {
+        const bool isStateReply = m_pendingStateRequestId >= 0
+            && message.value(QStringLiteral("id")).toInt(-1) == m_pendingStateRequestId;
+        if (isStateReply) {
             m_pendingStateRequestId = -1;
             setConnected(message.value(QStringLiteral("ok")).toBool(false));
             updateRefreshTimer();
         }
         applyCoreMessage(message);
+        // A full get_state answer without cam1 means the second sensor is gone; partial events never clear it.
+        if (isStateReply && message.value(QStringLiteral("ok")).toBool(false)
+            && !message.contains(QStringLiteral("cam1")))
+            clearCam1State();
     }
 }
 
@@ -2764,6 +2909,72 @@ void ApertarControlBridge::applyBufferState(const QJsonObject &state)
             emit storagePrerollLastChanged();
         }
     }
+    // [storage] frames_per_folder and clip_merge (settingsBody / bufferMembers); scalars may come as strings (KB trap 7).
+    const auto flag = [](const QJsonValue &raw) {
+        const QString text = raw.toString().trimmed().toLower();
+        return raw.isString() ? (text == QStringLiteral("true") || text == QStringLiteral("1")) : raw.toBool(false);
+    };
+    bool splitChanged = false;
+    if (state.contains(QStringLiteral("frames_per_folder"))) {
+        const QJsonValue raw = state.value(QStringLiteral("frames_per_folder"));
+        const int perFolder = qMax(0, raw.isString() ? raw.toString().trimmed().toInt() : raw.toInt(0));
+        if (m_framesPerFolder != perFolder) {
+            m_framesPerFolder = perFolder;
+            splitChanged = true;
+        }
+    }
+    if (state.contains(QStringLiteral("frames_per_folder_env"))) {
+        const bool fromEnv = flag(state.value(QStringLiteral("frames_per_folder_env")));
+        if (m_framesPerFolderEnv != fromEnv) {
+            m_framesPerFolderEnv = fromEnv;
+            splitChanged = true;
+        }
+    }
+    if (state.contains(QStringLiteral("clip_merge_enabled"))) {
+        const bool on = flag(state.value(QStringLiteral("clip_merge_enabled")));
+        if (!m_clipMergeKnown || m_clipMergeEnabled != on) {
+            m_clipMergeKnown = true;
+            m_clipMergeEnabled = on;
+            splitChanged = true;
+        }
+    }
+    if (state.contains(QStringLiteral("clip_merge_env_off"))) {
+        const bool envOff = flag(state.value(QStringLiteral("clip_merge_env_off")));
+        if (m_clipMergeEnvOff != envOff) {
+            m_clipMergeEnvOff = envOff;
+            splitChanged = true;
+        }
+    }
+    if (splitChanged)
+        emit clipSplitChanged();
+    // The merge progress; a field that is missing (an older Core, or a message without it) keeps its value.
+    bool progressChanged = false;
+    const auto number = [](const QJsonValue &raw) {
+        return int(qBound<qint64>(0, raw.isString() ? raw.toString().trimmed().toLongLong() : qint64(raw.toDouble(0.0)), qint64(2147483647)));
+    };
+    const auto takeInt = [&](const char *key, int &field) {
+        const QString k = QString::fromLatin1(key);
+        if (!state.contains(k)) return;
+        const int v = number(state.value(k));
+        if (field != v) { field = v; progressChanged = true; }
+    };
+    const auto takeText = [&](const char *key, QString &field) {
+        const QString k = QString::fromLatin1(key);
+        if (!state.contains(k)) return;
+        const QString v = state.value(k).toString();
+        if (field != v) { field = v; progressChanged = true; }
+    };
+    takeText("clip_merge_active", m_clipMergeActiveClip);
+    takeText("clip_merge_paused", m_clipMergePaused);
+    takeInt("clip_merge_pending", m_clipMergePending);
+    takeInt("clip_merge_clip_done", m_clipMergeClipDone);
+    takeInt("clip_merge_clip_total", m_clipMergeClipTotal);
+    takeInt("clip_merge_all_done", m_clipMergeAllDone);
+    takeInt("clip_merge_all_total", m_clipMergeAllTotal);
+    takeInt("clip_merge_all_clips", m_clipMergeAllClips);
+    takeInt("clip_merge_eta_s", m_clipMergeEtaS);
+    if (progressChanged)
+        emit clipMergeProgressChanged();
 }
 
 void ApertarControlBridge::applyCdngLogState(const QJsonObject &state)

@@ -373,14 +373,33 @@ void MediaStatusBridge::setFps(double value)
     recalculateRemaining();
 }
 
+void MediaStatusBridge::setCameraRates(bool cam0InTake, bool cam1InTake, double cam1SizeScale, double cam1Fps)
+{
+    const double scale = cam1SizeScale > 0.0 ? cam1SizeScale : 1.0;
+    if (m_cam0InTake == cam0InTake && m_cam1InTake == cam1InTake
+            && qFuzzyCompare(m_cam1SizeScale, scale) && qFuzzyCompare(m_cam1Fps + 1.0, cam1Fps + 1.0)) {
+        return;
+    }
+    m_cam0InTake = cam0InTake;
+    m_cam1InTake = cam1InTake;
+    m_cam1SizeScale = scale;
+    m_cam1Fps = cam1Fps;
+    recalculateRemaining();
+}
+
 void MediaStatusBridge::recalculateRemaining()
 {
     qint64 newRemainingSeconds = 0;
     qulonglong newRemainingStills = 0;
 
-    if (m_mediaMounted && m_frameSizeMB > 0.0 && m_fps > 0.0) {
+    if (m_mediaMounted && m_frameSizeMB > 0.0) {
         const double freeMB = static_cast<double>(m_freeBytes) / (1024.0 * 1024.0);
-        const double mbPerSecond = m_frameSizeMB * m_fps;
+        // Both Cores fill one drive, so the rates add (cam1's frame size scaled from cam0's).
+        double mbPerSecond = 0.0;
+        if (m_cam0InTake && m_fps > 0.0)
+            mbPerSecond += m_frameSizeMB * m_fps;
+        if (m_cam1InTake && m_cam1Fps > 0.0)
+            mbPerSecond += m_frameSizeMB * m_cam1SizeScale * m_cam1Fps;
 
         if (mbPerSecond > 0.0)
             newRemainingSeconds = static_cast<qint64>(freeMB / mbPerSecond);

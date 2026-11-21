@@ -360,6 +360,7 @@ SettingsBridge::SettingsBridge(QObject *parent)
     m_externalMonitorEnabled = m_settings.value("externalMonitorEnabled", false).toBool();
     m_externalMonitorMode = normalizeExternalMonitorMode(
         m_settings.value("externalMonitorMode", "Clean Feed").toString());
+    reloadDualSensorSettings();
     m_externalMonitorInfoOverlay = normalizeExternalMonitorInfoOverlay(
         m_settings.value("externalMonitorInfoOverlay", "On").toString());
     m_externalMonitorOrientation = normalizeExternalMonitorOrientation(
@@ -593,10 +594,80 @@ void SettingsBridge::pollExternalSettings()
         timecodeMode = QStringLiteral("Free Run");
     }
     setTimecodeMode(timecodeMode);
+    reloadDualSensorSettings();
 
     m_settings.sync();
     updateSettingsFileState();
     m_externalSettingsSyncing = false;
+}
+
+// previewSource and cam1Settings are written by the primary (set_preview_source, set_cam1_settings);
+// the UI only follows the file, like the external monitor keys, and never writes them.
+void SettingsBridge::reloadDualSensorSettings()
+{
+    static const QStringList kSources = {
+        QStringLiteral("Cam 0"), QStringLiteral("Cam 1"), QStringLiteral("Both"),
+        QStringLiteral("PiP Cam 0"), QStringLiteral("PiP Cam 1"), QStringLiteral("Both (Cam 1 left)")
+    };
+    const QString source = m_settings.value(QStringLiteral("previewSource"), QStringLiteral("Both")).toString().trimmed();
+    const QString normalizedSource = kSources.contains(source) ? source : QStringLiteral("Both");
+    if (m_previewSource != normalizedSource) {
+        m_previewSource = normalizedSource;
+        emit previewSourceChanged();
+    }
+
+    // "unison", or the tied controls. A QSettings list may come back as a QStringList.
+    const QVariant ties = m_settings.value(QStringLiteral("cam1Settings"), QStringLiteral("unison"));
+    QString tiesText;
+    if (ties.typeId() == QMetaType::QStringList) {
+        QStringList parts;
+        const QStringList raw = ties.toStringList();
+        for (const QString &part : raw) {
+            const QString trimmed = part.trimmed().toLower();
+            if (!trimmed.isEmpty())
+                parts.append(trimmed);
+        }
+        tiesText = parts.join(QLatin1Char(','));
+    } else {
+        tiesText = ties.toString().trimmed().toLower();
+    }
+    if (m_cam1Settings != tiesText) {
+        m_cam1Settings = tiesText;
+        emit cam1SettingsChanged();
+    }
+
+    static const QStringList kShootingModes = {
+        QStringLiteral("Both"), QStringLiteral("Cam 0"), QStringLiteral("Cam 1"), QStringLiteral("Follow preview")
+    };
+    const QString mode = m_settings.value(QStringLiteral("recordCameras"), QStringLiteral("Both")).toString().trimmed();
+    const QString normalizedMode = kShootingModes.contains(mode) ? mode : QStringLiteral("Both");
+    if (m_recordCamerasSetting != normalizedMode) {
+        m_recordCamerasSetting = normalizedMode;
+        emit recordCamerasSettingChanged();
+    }
+
+    // Wipe and stack (A5), written by Core through set_preview_source wipe/stack/opacity/direction.
+    const int wipe = std::clamp(m_settings.value(QStringLiteral("previewWipe"), 0).toInt(), 0, 100);
+    if (m_previewWipe != wipe) {
+        m_previewWipe = wipe;
+        emit previewWipeChanged();
+    }
+    const bool vertical = m_settings.value(QStringLiteral("previewWipeDirection"), QStringLiteral("Horizontal"))
+                              .toString().trimmed().compare(QStringLiteral("Vertical"), Qt::CaseInsensitive) == 0;
+    if (m_previewWipeVertical != vertical) {
+        m_previewWipeVertical = vertical;
+        emit previewWipeVerticalChanged();
+    }
+    const bool stack = m_settings.value(QStringLiteral("previewStack"), false).toBool();
+    if (m_previewStack != stack) {
+        m_previewStack = stack;
+        emit previewStackChanged();
+    }
+    const int opacity = std::clamp(m_settings.value(QStringLiteral("previewOpacity"), 50).toInt(), 0, 100);
+    if (m_previewOpacity != opacity) {
+        m_previewOpacity = opacity;
+        emit previewOpacityChanged();
+    }
 }
 
 bool SettingsBridge::zebraEnabled() const

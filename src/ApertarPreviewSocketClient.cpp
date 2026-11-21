@@ -52,6 +52,11 @@ bool ApertarPreviewSocketClient::connectToCore(const QString &socketPath)
     closeSocket();
     m_reconnectTimer.stop();
     m_socketPath = socketPath;
+    // "No frame since it connected" (design 5.2) reads this counter, so a new connection starts it at 0.
+    if (m_framesReceived != 0) {
+        m_framesReceived = 0;
+        emit framesReceivedChanged();
+    }
 
     const QByteArray pathBytes = socketPath.toUtf8();
 
@@ -484,6 +489,10 @@ void ApertarPreviewSocketClient::handlePreviewFrame(const QByteArray &message, Q
         closeAttachedFds();
         return;
     }
+
+    // Counted before the recording cap below, so it keeps moving during a take.
+    ++m_framesReceived;
+    emit framesReceivedChanged();
 
     // APERTAR_UI_PREVIEW_RECORDING_FPS: a frame over the cap is dropped here, before the renderer imports or draws it.
     if (m_recording && m_recordingFpsCap >= 0) {

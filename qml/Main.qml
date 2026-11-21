@@ -204,7 +204,7 @@ Window {
     Component.onCompleted: {
         sleepManager.sleepMode = settingsBridge.sleepMode
         clipModel.stillMode = settingsBridge.photoModeEnabled
-        apertarPreviewBridge.connectToCore()
+        apertarPreviewBridge.connectToCore("/tmp/apertar-core.sock")
         startupServicesTimer.start()
         if (apertarPreviewBridge.frameCounter > 0)
             root.handleFirstPreviewFrame()

@@ -145,6 +145,7 @@ int runMonitorOnly(QGuiApplication &app)
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("apertarPreviewBridge", &apertarPreviewBridge);
+    engine.rootContext()->setContextProperty("cam1InsetTest", false);   // v1: cam0 only here; no apertarPreviewBridge1
     engine.rootContext()->setContextProperty("apertarControlBridge", &apertarControlBridge);
     engine.rootContext()->setContextProperty("settingsBridge", &settings);
     engine.rootContext()->setContextProperty("mediaBridge", &monitorRuntimeBridge);
@@ -225,7 +226,7 @@ int runMonitorOnly(QGuiApplication &app)
                          QTimer::singleShot(0, window, syncVisibility);
                      });
 
-    apertarPreviewBridge.connectToCore();
+    apertarPreviewBridge.connectToCore(QStringLiteral("/tmp/apertar-core.sock"));
     syncVisibility();
     qInfo().noquote()
         << QStringLiteral("Apertar compositor-free monitor process: screen=%1 geometry=%2x%3")
@@ -289,6 +290,9 @@ int main(int argc, char *argv[])
                .arg(displayConfig.hdmiExternalOnly() ? QStringLiteral("true") : QStringLiteral("false"));
 
     ApertarPreviewSocketClient apertarPreviewBridge;
+    // T65: the second sensor's preview, on its own socket (the symlink test points it at cam0's).
+    ApertarPreviewSocketClient apertarPreviewBridge1;
+    const bool cam1InsetTest = environmentFlagEnabled("APERTAR_UI_CAM1_INSET");
     SystemStatsBridge statsBridge;
     DeviceInfoBridge deviceInfoBridge;
     SystemActionBridge systemActionBridge;
@@ -315,6 +319,45 @@ int main(int argc, char *argv[])
 
     settings.setControlBridge(&apertarControlBridge);
     monitorRuntimeBridge.setMediaBridge(&mediaBridge);
+    // T66: REMAINING counts the cameras in the take. cam1's frame is cam0's scaled by pixels and bit depth.
+    auto syncMediaRates = [&]() {
+        const QString recordCameras = apertarControlBridge.recordCameras();
+        const bool cam1InTake = apertarControlBridge.cam1Present()
+            && (recordCameras == QLatin1String("cam1") || recordCameras == QLatin1String("both"));
+        const bool cam0InTake = recordCameras != QLatin1String("cam1") && recordCameras != QLatin1String("none");
+        double scale = 1.0;
+        double fps1 = 0.0;
+        if (cam1InTake) {
+            const QVariantMap cam1 = apertarControlBridge.cam1Settings();
+            double w1 = cam1.value(QStringLiteral("width")).toDouble();
+            double h1 = cam1.value(QStringLiteral("height")).toDouble();
+            if (!(w1 > 0.0 && h1 > 0.0)) {
+                const QStringList parts = cam1.value(QStringLiteral("resolution")).toString().split(QLatin1Char('x'));
+                if (parts.size() == 2) {
+                    w1 = parts.at(0).toDouble();
+                    h1 = parts.at(1).toDouble();
+                }
+            }
+            const QStringList parts0 = apertarControlBridge.resolution().split(QLatin1Char('x'));
+            const double w0 = parts0.size() == 2 ? parts0.at(0).toDouble() : 0.0;
+            const double h0 = parts0.size() == 2 ? parts0.at(1).toDouble() : 0.0;
+            const double bits1 = cam1.value(QStringLiteral("raw_bit_depth")).toDouble();
+            const double bits0 = apertarControlBridge.rawBitDepth().section(QLatin1Char('-'), 0, 0).toDouble();
+            if (w1 > 0.0 && h1 > 0.0 && w0 > 0.0 && h0 > 0.0) {
+                scale = (w1 * h1) / (w0 * h0);
+                if (bits1 > 0.0 && bits0 > 0.0)
+                    scale *= bits1 / bits0;
+            }
+            fps1 = cam1.value(QStringLiteral("fps")).toDouble();
+        }
+        mediaBridge.setCameraRates(cam0InTake, cam1InTake, scale, fps1);
+    };
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::recordCamerasChanged, &mediaBridge, syncMediaRates);
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::cam1PresentChanged, &mediaBridge, syncMediaRates);
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::cam1SettingsChanged, &mediaBridge, syncMediaRates);
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::resolutionChanged, &mediaBridge, syncMediaRates);
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::rawBitDepthChanged, &mediaBridge, syncMediaRates);
+    syncMediaRates();
     QObject::connect(&apertarControlBridge, &ApertarControlBridge::coreMediaStateChanged,
                      &mediaBridge, &MediaStatusBridge::setCoreMediaState);
     settings.setDefaultCameraControlsOpacity(displayConfig.controlsOpacity());
@@ -345,11 +388,27 @@ int main(int argc, char *argv[])
             audioMeterBridge.suspendMonitoring();
             apertarPreviewBridge.disconnectFromCore();
         } else {
-            apertarPreviewBridge.connectToCore();
+            apertarPreviewBridge.connectToCore(QStringLiteral("/tmp/apertar-core.sock"));
         }
     });
     QObject::connect(&apertarControlBridge, &ApertarControlBridge::recordingChanged, &apertarPreviewBridge,
                      [&]() { apertarPreviewBridge.setRecording(apertarControlBridge.recording()); });
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::recordingChanged, &apertarPreviewBridge1,
+                     [&]() { apertarPreviewBridge1.setRecording(apertarControlBridge.recording()); });
+    // The cam1 preview connects only while Core's state has a cam1 (or in the inset test), and not in standby.
+    auto syncCam1Preview = [&]() {
+        const bool wanted = !apertarControlBridge.standby()
+            && (apertarControlBridge.cam1Present() || cam1InsetTest);
+        if (wanted)
+            apertarPreviewBridge1.connectToCore(QStringLiteral("/tmp/apertar-core-cam1.sock"));
+        else
+            apertarPreviewBridge1.disconnectFromCore();
+    };
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::cam1PresentChanged, &apertarPreviewBridge1,
+                     syncCam1Preview);
+    QObject::connect(&apertarControlBridge, &ApertarControlBridge::standbyChanged, &apertarPreviewBridge1,
+                     syncCam1Preview);
+    syncCam1Preview();
 
     QQmlApplicationEngine engine;
     auto *cdngProvider = new CdngImageProvider(false, false, false);
@@ -376,6 +435,8 @@ int main(int argc, char *argv[])
         }
     });
     engine.rootContext()->setContextProperty("apertarPreviewBridge", &apertarPreviewBridge);
+    engine.rootContext()->setContextProperty("apertarPreviewBridge1", &apertarPreviewBridge1);
+    engine.rootContext()->setContextProperty("cam1InsetTest", cam1InsetTest);
     engine.rootContext()->setContextProperty("statsBridge", &statsBridge);
     engine.rootContext()->setContextProperty("deviceInfoBridge", &deviceInfoBridge);
     engine.rootContext()->setContextProperty("displayConfigBridge", &displayConfig);
