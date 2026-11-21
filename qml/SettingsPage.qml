@@ -2754,35 +2754,50 @@ Item {
     Component {
         id: monitoringFocusPeakingComponent
 
-        MonitoringRow {
-            property string reorderSectionName: "Monitoring"
-            popupParent: dropdownOverlay
-            dropdownController: sharedDropdownController
-            title: "Focus Peaking"
-            titleIconSource: "qrc:/qml/icons/focuspeaking.png"
-            description: "Highlight in-focus edges"
-            enabled: root.settingsState ? root.settingsState.focusPeakingEnabled : false
-            favoriteEnabled: root.favoriteControlsEnabled
-            favorited: root.itemIsFavorited("focusPeaking")
-            choice1Label: "Threshold"
-            choice1Value: root.valueToFocusThreshold(root.settingsState ? root.settingsState.focusPeakingThreshold : 0.04)
-            choice1Options: ["Low", "Medium", "High"]
-            choice2Label: "Color"
-            choice2Value: root.settingsState ? root.settingsState.focusPeakingColor : "Red"
-            choice2Options: ["Red", "Green", "Blue", "Yellow", "Pink"]
-            onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
-            onFavoriteToggleRequested: root.toggleFavoriteItem("focusPeaking")
-            onToggleRequested: {
-                if (root.settingsState)
-                    root.settingsState.focusPeakingEnabled = !root.settingsState.focusPeakingEnabled
+        Column {
+            width: parent.width
+            spacing: 6
+
+            MonitoringRow {
+                property string reorderSectionName: "Monitoring"
+                popupParent: dropdownOverlay
+                dropdownController: sharedDropdownController
+                title: "Focus Peaking"
+                titleIconSource: "qrc:/qml/icons/focuspeaking.png"
+                description: "Highlight in-focus edges"
+                enabled: root.settingsState ? root.settingsState.focusPeakingEnabled : false
+                favoriteEnabled: root.favoriteControlsEnabled
+                favorited: root.itemIsFavorited("focusPeaking")
+                choice1Label: "Threshold"
+                choice1Value: root.valueToFocusThreshold(root.settingsState ? root.settingsState.focusPeakingThreshold : 0.04)
+                choice1Options: ["Low", "Medium", "High"]
+                choice2Label: "Color"
+                choice2Value: root.settingsState ? root.settingsState.focusPeakingColor : "Red"
+                choice2Options: ["Red", "Green", "Blue", "Yellow", "Pink"]
+                onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
+                onFavoriteToggleRequested: root.toggleFavoriteItem("focusPeaking")
+                onToggleRequested: {
+                    if (root.settingsState)
+                        root.settingsState.focusPeakingEnabled = !root.settingsState.focusPeakingEnabled
+                }
+                onChoice1Selected: function(v) {
+                    if (root.settingsState)
+                        root.settingsState.focusPeakingThreshold = root.focusThresholdToValue(v)
+                }
+                onChoice2Selected: function(v) {
+                    if (root.settingsState)
+                        root.settingsState.focusPeakingColor = v
+                }
             }
-            onChoice1Selected: function(v) {
-                if (root.settingsState)
-                    root.settingsState.focusPeakingThreshold = root.focusThresholdToValue(v)
-            }
-            onChoice2Selected: function(v) {
-                if (root.settingsState)
-                    root.settingsState.focusPeakingColor = v
+
+            Text {
+                width: parent.width
+                text: "No measured cost. At the limit of 4K Clear HDR the camera lost fewer frames with them on. Leave them on."
+                color: "#8cffffff"
+                font.family: interRegular.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                wrapMode: Text.WordWrap
+                renderType: Text.NativeRendering
             }
         }
     }
@@ -2790,28 +2805,43 @@ Item {
     Component {
         id: monitoringZebraComponent
 
-        MonitoringRow {
-            property string reorderSectionName: "Monitoring"
-            popupParent: dropdownOverlay
-            dropdownController: sharedDropdownController
-            title: "Zebra"
-            titleIconSource: "qrc:/qml/icons/zebra.png"
-            description: "Exposure clipping warning"
-            enabled: root.settingsState ? root.settingsState.zebraEnabled : false
-            favoriteEnabled: root.favoriteControlsEnabled
-            favorited: root.itemIsFavorited("zebra")
-            choice1Label: "Level"
-            choice1Value: root.thresholdToZebraLevel(root.settingsState ? root.settingsState.zebraThreshold : 0.70)
-            choice1Options: ["70%", "75%", "80%", "85%", "90%", "95%", "100%"]
-            onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
-            onFavoriteToggleRequested: root.toggleFavoriteItem("zebra")
-            onToggleRequested: {
-                if (root.settingsState)
-                    root.settingsState.zebraEnabled = !root.settingsState.zebraEnabled
+        Column {
+            width: parent.width
+            spacing: 6
+
+            MonitoringRow {
+                property string reorderSectionName: "Monitoring"
+                popupParent: dropdownOverlay
+                dropdownController: sharedDropdownController
+                title: "Zebra"
+                titleIconSource: "qrc:/qml/icons/zebra.png"
+                description: "Exposure clipping warning"
+                enabled: root.settingsState ? root.settingsState.zebraEnabled : false
+                favoriteEnabled: root.favoriteControlsEnabled
+                favorited: root.itemIsFavorited("zebra")
+                choice1Label: "Level"
+                choice1Value: root.thresholdToZebraLevel(root.settingsState ? root.settingsState.zebraThreshold : 0.70)
+                choice1Options: ["70%", "75%", "80%", "85%", "90%", "95%", "100%"]
+                onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
+                onFavoriteToggleRequested: root.toggleFavoriteItem("zebra")
+                onToggleRequested: {
+                    if (root.settingsState)
+                        root.settingsState.zebraEnabled = !root.settingsState.zebraEnabled
+                }
+                onChoice1Selected: function(v) {
+                    if (root.settingsState)
+                        root.settingsState.zebraThreshold = root.zebraLevelToThreshold(v)
+                }
             }
-            onChoice1Selected: function(v) {
-                if (root.settingsState)
-                    root.settingsState.zebraThreshold = root.zebraLevelToThreshold(v)
+
+            Text {
+                width: parent.width
+                text: "No measured cost. At the limit of 4K Clear HDR the camera lost fewer frames with them on. Leave them on."
+                color: "#8cffffff"
+                font.family: interRegular.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                wrapMode: Text.WordWrap
+                renderType: Text.NativeRendering
             }
         }
     }
@@ -3482,6 +3512,17 @@ Item {
                 color: "#9aa5b1"
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
+            }
+
+            Text {
+                width: parent.width
+                visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
+                text: "Makes Clear HDR 16-bit files a quarter smaller but costs 2 to 3 fps in 4K. No effect in SDR, no cost at 2K."
+                color: "#8cffffff"
+                font.family: interRegular.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                wrapMode: Text.WordWrap
+                renderType: Text.NativeRendering
             }
 
             Column {
@@ -4176,23 +4217,38 @@ Item {
             onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
             onFavoriteToggleRequested: root.toggleFavoriteItem("audioOptions")
 
-            MonitoringRow {
+            Column {
                 width: parent.width
-                title: "Record Audio"
-                description: (typeof audioDeviceBridge !== "undefined" && audioDeviceBridge && !audioDeviceBridge.hasInputDevices)
-                             ? "No audio input device detected"
-                             : "Capture audio alongside recorded clips"
-                enabled: root.settingsState
-                         ? ((typeof audioDeviceBridge !== "undefined" && audioDeviceBridge && audioDeviceBridge.hasInputDevices)
-                            ? root.settingsState.recordAudioEnabled
-                            : false)
-                         : false
-                available: typeof audioDeviceBridge !== "undefined"
-                           ? audioDeviceBridge.hasInputDevices
-                           : false
-                onToggleRequested: {
-                    if (root.settingsState)
-                        root.settingsState.recordAudioEnabled = !root.settingsState.recordAudioEnabled
+                spacing: 6
+
+                MonitoringRow {
+                    width: parent.width
+                    title: "Record Audio"
+                    description: (typeof audioDeviceBridge !== "undefined" && audioDeviceBridge && !audioDeviceBridge.hasInputDevices)
+                                 ? "No audio input device detected"
+                                 : "Capture audio alongside recorded clips"
+                    enabled: root.settingsState
+                             ? ((typeof audioDeviceBridge !== "undefined" && audioDeviceBridge && audioDeviceBridge.hasInputDevices)
+                                ? root.settingsState.recordAudioEnabled
+                                : false)
+                             : false
+                    available: typeof audioDeviceBridge !== "undefined"
+                               ? audioDeviceBridge.hasInputDevices
+                               : false
+                    onToggleRequested: {
+                        if (root.settingsState)
+                            root.settingsState.recordAudioEnabled = !root.settingsState.recordAudioEnabled
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    text: "Costs under 1 fps, only at the limit of 4K Clear HDR. Record sound as you like; at the limit, turning it off gains about 1 fps."
+                    color: "#8cffffff"
+                    font.family: interRegular.font.family
+                    font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                    wrapMode: Text.WordWrap
+                    renderType: Text.NativeRendering
                 }
             }
 
@@ -5469,6 +5525,16 @@ Item {
                             text: apertarControlBridge && apertarControlBridge.framesPerFolderEnv
                                   ? "Set by APERTAR_CDNG_FRAMES_PER_FOLDER"
                                   : "Start a new folder after this many frames"
+                            color: "#8cffffff"
+                            font.family: interRegular.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                            wrapMode: Text.WordWrap
+                            renderType: Text.NativeRendering
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: "Needed for long cDNG takes: a folder with many files slows file creation. No effect on MLV, ProRes and H.264."
                             color: "#8cffffff"
                             font.family: interRegular.font.family
                             font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
