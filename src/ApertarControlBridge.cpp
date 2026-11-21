@@ -740,6 +740,18 @@ bool ApertarControlBridge::applyClearHdr(bool enabled)
     return true;
 }
 
+bool ApertarControlBridge::applyStopOnDroppedFrame(bool enabled)
+{
+    if (!sendCoreCommand(QStringLiteral("set_stop_on_dropped_frame"), {
+            { QStringLiteral("enabled"), enabled ? QStringLiteral("true") : QStringLiteral("false") }
+        })) {
+        return false;
+    }
+
+    setStopOnDroppedFrameValue(enabled);
+    return true;
+}
+
 bool ApertarControlBridge::applyCdngLog(const QString &value)
 {
     // Core refuses anything but off or auto; the reply carries cdng_log, which applyCoreState applies.
@@ -1877,6 +1889,8 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
 
     if (state.contains(QStringLiteral("clear_hdr")))
         setClearHdrValue(state.value(QStringLiteral("clear_hdr")).toBool(false));
+    if (state.contains(QStringLiteral("stop_on_dropped_frame")))
+        setStopOnDroppedFrameValue(state.value(QStringLiteral("stop_on_dropped_frame")).toBool(false));
 
     if (state.contains(QStringLiteral("h264_width")) && state.contains(QStringLiteral("h264_height"))) {
         setH264ResolutionValue(formatH264ResolutionValue(
@@ -2783,6 +2797,15 @@ void ApertarControlBridge::setClearHdrValue(bool value)
 
     m_clearHdr = value;
     emit clearHdrChanged();
+}
+
+void ApertarControlBridge::setStopOnDroppedFrameValue(bool value)
+{
+    if (m_stopOnDroppedFrame == value)
+        return;
+
+    m_stopOnDroppedFrame = value;
+    emit stopOnDroppedFrameChanged();
 }
 
 void ApertarControlBridge::setRawBitDepthValue(const QString &value)

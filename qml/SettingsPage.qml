@@ -1832,6 +1832,16 @@ Item {
         }
     }
 
+    function executeApplyStopOnDroppedFrame(enabled) {
+        mediaSettingErrorOpen = false
+        if (!apertarControlBridge.applyStopOnDroppedFrame(enabled)) {
+            mediaSettingErrorText = apertarControlBridge.lastError.length > 0
+                                  ? apertarControlBridge.lastError
+                                  : "Stop on Dropped Frame could not be changed."
+            mediaSettingErrorOpen = true
+        }
+    }
+
     function wifiRequiresPassword(security) {
         var normalized = security ? String(security).trim() : ""
         if (normalized.length === 0)
@@ -5619,6 +5629,61 @@ Item {
                             radius: parent.radius
                             color: "#73ffffff"
                         }
+                    }
+                }
+            }
+
+            // Core's stop_on_dropped_frame: the take ends at its first dropped frame.
+            Rectangle {
+                width: parent.width
+                visible: !!apertarControlBridge
+                height: root.largeLandscapeLayout ? 118 : (root.standardLandscapeLayout ? 88 : 76)
+                radius: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 20 : 18)
+                color: "#14ffffff"
+                border.width: 1
+                border.color: "#1affffff"
+                opacity: apertarControlBridge && !apertarControlBridge.recording ? 1.0 : 0.48
+
+                Item {
+                    anchors.fill: parent
+                    anchors.leftMargin: root.largeLandscapeLayout ? 30 : (root.standardLandscapeLayout ? 22 : 18)
+                    anchors.rightMargin: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 18 : 16)
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: stopOnDroppedFrameToggle.left
+                        anchors.rightMargin: root.largeLandscapeLayout ? 26 : 18
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: root.largeLandscapeLayout ? 8 : (root.standardLandscapeLayout ? 6 : 5)
+
+                        Text {
+                            width: parent.width
+                            text: "Stop on Dropped Frame"
+                            color: "white"
+                            font.family: interBold.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 27 : (root.standardLandscapeLayout ? 20 : 16)
+                            renderType: Text.NativeRendering
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: "Ends the take at the first dropped frame"
+                            color: "#8cffffff"
+                            font.family: interRegular.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 12)
+                            renderType: Text.NativeRendering
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    TogglePill {
+                        id: stopOnDroppedFrameToggle
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: apertarControlBridge ? apertarControlBridge.stopOnDroppedFrame : false
+                        enabled: !!apertarControlBridge && !apertarControlBridge.recording
+                        onToggled: function(value) { root.executeApplyStopOnDroppedFrame(value) }
                     }
                 }
             }
@@ -10204,10 +10269,10 @@ Item {
                 width: parent.width
                 height: root.largeLandscapeLayout ? 84 : (root.standardLandscapeLayout ? 64 : (root.compactLandscapeLayout ? 44 : 54))
                 radius: root.largeLandscapeLayout ? 28 : (root.standardLandscapeLayout ? 21 : (root.compactLandscapeLayout ? 14 : 18))
-                color: thermalApplyErrorCloseArea.containsPress ? "#20ffffff" : "#14ffffff"
+                color: mediaSettingErrorCloseArea.containsPress ? "#20ffffff" : "#14ffffff"
                 border.width: 1
                 border.color: "#1affffff"
-                scale: thermalApplyErrorCloseArea.containsPress ? 0.985 : 1.0
+                scale: mediaSettingErrorCloseArea.containsPress ? 0.985 : 1.0
 
                 Behavior on scale {
                     NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
@@ -10223,9 +10288,9 @@ Item {
                 }
 
                 MouseArea {
-                    id: thermalApplyErrorCloseArea
+                    id: mediaSettingErrorCloseArea
                     anchors.fill: parent
-                    onClicked: root.thermalApplyErrorOpen = false
+                    onClicked: root.mediaSettingErrorOpen = false
                 }
             }
         }
