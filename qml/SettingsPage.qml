@@ -3446,7 +3446,7 @@ Item {
                          ? (apertarControlBridge.cdngLogBits > 0
                             ? "Stores one step down (" + apertarControlBridge.cdngLogBits + "-bit)"
                             : "One step down")
-                         : "Not applied: in SDR the sensor chip already compresses the raw stream; Log works in Clear HDR. Files stay linear.")
+                         : "Not applied: outside Clear HDR the sensor chip already compresses the raw stream; Log works in Clear HDR. Files stay linear.")
                 color: "#9aa5b1"
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
