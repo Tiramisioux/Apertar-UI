@@ -693,36 +693,38 @@ bool ApertarControlBridge::applyBufferMode(const QString &value)
     });
 }
 
-void ApertarControlBridge::applyFramesPerFolder(int value)
+bool ApertarControlBridge::applyFramesPerFolder(int value)
 {
     // Core takes 0 (one folder) or 100-100000; the tiles send 0 or 5000 (the SSD campaign's value).
     if (value != 0 && (value < 100 || value > 100000)) {
-        setLastError(QStringLiteral("Invalid frames per folder."));
-        return;
+        setLastError(QStringLiteral("Frames per folder must be 0 (one folder) or 100 to 100000."));
+        return false;
     }
     if (!sendCoreCommand(QStringLiteral("set_frames_per_folder"), {
             { QStringLiteral("value"), QString::number(value) }
         })) {
-        return;
+        return false;
     }
     if (m_framesPerFolder != value) {
         m_framesPerFolder = value;
         emit clipSplitChanged();
     }
+    return true;
 }
 
-void ApertarControlBridge::applyClipMerge(bool enabled)
+bool ApertarControlBridge::applyClipMerge(bool enabled)
 {
     if (!sendCoreCommand(QStringLiteral("set_clip_merge"), {
             { QStringLiteral("enabled"), enabled ? QStringLiteral("true") : QStringLiteral("false") }
         })) {
-        return;
+        return false;
     }
     if (!m_clipMergeKnown || m_clipMergeEnabled != enabled) {
         m_clipMergeKnown = true;
         m_clipMergeEnabled = enabled;
         emit clipSplitChanged();
     }
+    return true;
 }
 
 bool ApertarControlBridge::applyClearHdr(bool enabled)

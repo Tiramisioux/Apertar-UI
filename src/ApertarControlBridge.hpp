@@ -242,8 +242,8 @@ public:
     Q_INVOKABLE bool applyTuningFile(const QString &path);
     Q_INVOKABLE bool applyRawBitDepth(const QString &displayValue);
     Q_INVOKABLE bool applyBufferMode(const QString &value);
-    Q_INVOKABLE void applyFramesPerFolder(int value);
-    Q_INVOKABLE void applyClipMerge(bool enabled);
+    Q_INVOKABLE bool applyFramesPerFolder(int value);
+    Q_INVOKABLE bool applyClipMerge(bool enabled);
     Q_INVOKABLE bool applyStoragePreroll();
     Q_INVOKABLE bool applyStoragePrerollAuto(bool on);
     Q_INVOKABLE bool applyClipNameTemplate(const QString &value);

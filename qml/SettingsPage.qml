@@ -736,6 +736,8 @@ Item {
     property string timeApplyErrorText: ""
     property bool thermalApplySuccessOpen: false
     property bool thermalApplyErrorOpen: false
+    property bool mediaSettingErrorOpen: false
+    property string mediaSettingErrorText: ""
     property string thermalApplyErrorText: ""
     property string wifiSelectedSsid: ""
     property string wifiSelectedSecurity: ""
@@ -1807,6 +1809,26 @@ Item {
             thermalApplyErrorOpen = true
         } else {
             thermalApplySuccessOpen = true
+        }
+    }
+
+    function executeApplyFramesPerFolder(value) {
+        mediaSettingErrorOpen = false
+        if (!apertarControlBridge.applyFramesPerFolder(value)) {
+            mediaSettingErrorText = apertarControlBridge.lastError.length > 0
+                                  ? apertarControlBridge.lastError
+                                  : "Split Long Takes could not be changed."
+            mediaSettingErrorOpen = true
+        }
+    }
+
+    function executeApplyClipMerge(enabled) {
+        mediaSettingErrorOpen = false
+        if (!apertarControlBridge.applyClipMerge(enabled)) {
+            mediaSettingErrorText = apertarControlBridge.lastError.length > 0
+                                  ? apertarControlBridge.lastError
+                                  : "Merge Split Clips could not be changed."
+            mediaSettingErrorOpen = true
         }
     }
 
@@ -5389,130 +5411,215 @@ Item {
 
             // [storage] frames_per_folder: Off (0, one folder) or N frames per part_NNN folder; a value set in the config file
             // and not in the list is offered too (the WebUI's Media card has the same choice).
-            InlineDropdownField {
+            Rectangle {
                 width: parent.width
                 visible: !!apertarControlBridge && apertarControlBridge.framesPerFolder >= 0
-                label: apertarControlBridge && apertarControlBridge.framesPerFolderEnv
-                       ? "Split Long Takes (set by APERTAR_CDNG_FRAMES_PER_FOLDER)" : "Split Long Takes"
-                value: apertarControlBridge ? String(apertarControlBridge.framesPerFolder) : "0"
-                displayValue: value === "0" ? "Off" : value + " frames per folder"
-                options: {
-                    var list = [{ value: "0", label: "Off" }]
-                    var presets = [1000, 2000, 5000, 10000]
-                    var current = apertarControlBridge ? apertarControlBridge.framesPerFolder : 0
-                    if (current > 0 && presets.indexOf(current) < 0) {
-                        presets.push(current)
-                        presets.sort(function(a, b) { return a - b })
-                    }
-                    for (var i = 0; i < presets.length; ++i)
-                        list.push({ value: String(presets[i]), label: presets[i] + " frames per folder" })
-                    return list
-                }
-                fieldEnabled: !!apertarControlBridge && !apertarControlBridge.framesPerFolderEnv
-                popupParent: dropdownOverlay
-                dropdownController: sharedDropdownController
-                onValueSelected: function(v) { apertarControlBridge.applyFramesPerFolder(parseInt(v, 10)) }
-            }
+                height: root.largeLandscapeLayout ? (splitTakesColumn.implicitHeight + 44) : (root.standardLandscapeLayout ? (splitTakesColumn.implicitHeight + 32) : (splitTakesColumn.implicitHeight + 28))
+                radius: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 20 : 18)
+                color: "#171717"
+                border.width: 1
+                border.color: "#1affffff"
+                opacity: apertarControlBridge && !apertarControlBridge.recording ? 1.0 : 0.48
 
-            // [storage] clip_merge: joins the part folders of split clips when the camera is idle.
-            Column {
-                width: parent.width
-                spacing: 8
-                visible: !!apertarControlBridge && apertarControlBridge.clipMergeKnown
-
-                Text {
-                    width: parent.width
-                    text: "Merge Split Clips"
-                    color: "white"
-                    font.pixelSize: 14
-                }
-
-                Row {
-                    width: parent.width
-                    spacing: 12
-
-                    ActionTile {
-                        width: (parent.width - 12) / 2
-                        label: "On"
-                        tone: apertarControlBridge.clipMergeEnabled ? "accent" : "default"
-                        actionEnabled: !apertarControlBridge.clipMergeEnvOff && !apertarControlBridge.clipMergeEnabled
-                        onClicked: apertarControlBridge.applyClipMerge(true)
-                    }
-
-                    ActionTile {
-                        width: (parent.width - 12) / 2
-                        label: "Off"
-                        tone: !apertarControlBridge.clipMergeEnabled ? "accent" : "default"
-                        actionEnabled: !apertarControlBridge.clipMergeEnvOff && apertarControlBridge.clipMergeEnabled
-                        onClicked: apertarControlBridge.applyClipMerge(false)
-                    }
-                }
-
-                Text {
-                    width: parent.width
-                    text: (apertarControlBridge.clipMergeEnvOff ? "Turned off by APERTAR_CLIP_MERGE \u00b7 " : "")
-                          + (apertarControlBridge.clipMergeEnabled
-                             ? "Joins the parts into one folder when the camera is idle; pauses when a take starts"
-                             : "Split clips stay in their part folders")
-                    color: "#9aa5b1"
-                    font.pixelSize: 12
-                    wrapMode: Text.WordWrap
-                }
-
-                Repeater {
-                    // Current clip, then all clips (KB clip-merge-progress-plan.md), in the merge grey.
-                    model: apertarControlBridge && apertarControlBridge.clipMergeEnabled && apertarControlBridge.clipMergeAllClips > 0
-                           && apertarControlBridge.clipMergeAllTotal > 0 ? 2 : 0
+                Item {
+                    anchors.fill: parent
+                    anchors.margins: root.largeLandscapeLayout ? 22 : (root.standardLandscapeLayout ? 16 : 14)
 
                     Column {
-                        readonly property bool clipRow: index === 0
-                        readonly property int done: clipRow ? apertarControlBridge.clipMergeClipDone : apertarControlBridge.clipMergeAllDone
-                        readonly property int total: clipRow ? apertarControlBridge.clipMergeClipTotal : apertarControlBridge.clipMergeAllTotal
-                        readonly property int percent: total > 0 ? Math.min(100, Math.floor(100 * done / total)) : 0
+                        id: splitTakesColumn
                         width: parent.width
-                        spacing: 4
+                        spacing: root.largeLandscapeLayout ? 18 : (root.standardLandscapeLayout ? 12 : 10)
+
+                        InlineDropdownField {
+                            width: parent.width
+                            label: "Split Long Takes"
+                            value: apertarControlBridge ? String(apertarControlBridge.framesPerFolder) : "0"
+                            displayValue: value === "0" ? "Off" : value + " frames per folder"
+                            options: {
+                                var list = [{ value: "0", label: "Off" }]
+                                var presets = [1000, 2000, 5000, 10000]
+                                var current = apertarControlBridge ? apertarControlBridge.framesPerFolder : 0
+                                if (current > 0 && presets.indexOf(current) < 0) {
+                                    presets.push(current)
+                                    presets.sort(function(a, b) { return a - b })
+                                }
+                                for (var i = 0; i < presets.length; ++i)
+                                    list.push({ value: String(presets[i]), label: presets[i] + " frames per folder" })
+                                return list
+                            }
+                            fieldEnabled: !!apertarControlBridge && !apertarControlBridge.recording
+                                          && !apertarControlBridge.framesPerFolderEnv
+                            popupParent: dropdownOverlay
+                            dropdownController: sharedDropdownController
+                            onValueSelected: function(v) { root.executeApplyFramesPerFolder(parseInt(v, 10)) }
+                        }
 
                         Text {
                             width: parent.width
-                            text: clipRow
-                                  ? (apertarControlBridge.clipMergeActiveClip !== ""
-                                     ? apertarControlBridge.clipMergeActiveClip + " \u00b7 " + percent + " % (" + done + " / " + total + ")"
-                                     : "Waiting")
-                                  : (apertarControlBridge.clipMergeAllClips + (apertarControlBridge.clipMergeAllClips === 1 ? " clip" : " clips")
-                                     + " \u00b7 " + percent + " %"
-                                     + (apertarControlBridge.clipMergePaused !== ""
-                                        ? " \u00b7 paused (" + apertarControlBridge.clipMergePaused + ")"
-                                        : " \u00b7 " + root.clipMergeEtaText(apertarControlBridge.clipMergeEtaS) + " left"))
-                            color: "#d7d9de"
-                            font.pixelSize: 12
+                            text: apertarControlBridge && apertarControlBridge.framesPerFolderEnv
+                                  ? "Set by APERTAR_CDNG_FRAMES_PER_FOLDER"
+                                  : "Start a new folder after this many frames"
+                            color: "#8cffffff"
+                            font.family: interRegular.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                            wrapMode: Text.WordWrap
+                            renderType: Text.NativeRendering
+                        }
+                    }
+                }
+            }
+
+            // [storage] clip_merge: joins the part folders of split clips when the camera is idle.
+            Rectangle {
+                width: parent.width
+                visible: !!apertarControlBridge && apertarControlBridge.clipMergeKnown
+                height: root.largeLandscapeLayout ? 118 : (root.standardLandscapeLayout ? 88 : 76)
+                radius: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 20 : 18)
+                color: "#14ffffff"
+                border.width: 1
+                border.color: "#1affffff"
+                opacity: apertarControlBridge && !apertarControlBridge.recording && !apertarControlBridge.clipMergeEnvOff ? 1.0 : 0.48
+
+                Item {
+                    anchors.fill: parent
+                    anchors.leftMargin: root.largeLandscapeLayout ? 30 : (root.standardLandscapeLayout ? 22 : 18)
+                    anchors.rightMargin: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 18 : 16)
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: clipMergeToggle.left
+                        anchors.rightMargin: root.largeLandscapeLayout ? 26 : 18
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: root.largeLandscapeLayout ? 8 : (root.standardLandscapeLayout ? 6 : 5)
+
+                        Text {
+                            width: parent.width
+                            text: "Merge Split Clips"
+                            color: "white"
+                            font.family: interBold.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 27 : (root.standardLandscapeLayout ? 20 : 16)
+                            renderType: Text.NativeRendering
                             elide: Text.ElideRight
                         }
 
-                        Rectangle {
+                        Text {
                             width: parent.width
-                            height: 8
-                            radius: height / 2
-                            color: "#1a1a1a"
-                            border.width: 1
-                            border.color: "#1affffff"
+                            text: apertarControlBridge && apertarControlBridge.clipMergeEnvOff
+                                  ? "Turned off by APERTAR_CLIP_MERGE"
+                                  : "Join the part folders when the camera is idle"
+                            color: "#8cffffff"
+                            font.family: interRegular.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 12)
+                            renderType: Text.NativeRendering
+                            elide: Text.ElideRight
+                        }
+                    }
 
-                            Rectangle {
-                                width: parent.width * (parent.parent.total > 0 ? Math.min(1, parent.parent.done / parent.parent.total) : 0)
-                                height: parent.height
-                                radius: parent.radius
-                                color: "#73ffffff"   // the READY pill's merge grey, a little stronger on the dark track
-                            }
+                    TogglePill {
+                        id: clipMergeToggle
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: apertarControlBridge ? apertarControlBridge.clipMergeEnabled : false
+                        enabled: !!apertarControlBridge && !apertarControlBridge.recording
+                                 && !apertarControlBridge.clipMergeEnvOff
+                        onToggled: function(value) { root.executeApplyClipMerge(value) }
+                    }
+                }
+            }
+
+            // Progress of the merge worker: the current clip, then all clips, in the READY pill's merge grey.
+            Column {
+                width: parent.width
+                spacing: root.largeLandscapeLayout ? 12 : (root.standardLandscapeLayout ? 8 : 6)
+                visible: !!apertarControlBridge && apertarControlBridge.clipMergeKnown && apertarControlBridge.clipMergeEnabled
+
+                Text {
+                    width: parent.width
+                    visible: apertarControlBridge.clipMergePending === 0 && apertarControlBridge.clipMergeAllClips === 0
+                    text: "Nothing to merge"
+                    color: "#8cffffff"
+                    font.family: interRegular.font.family
+                    font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                    renderType: Text.NativeRendering
+                }
+
+                Column {
+                    id: mergeClipProgress
+                    readonly property int percent: apertarControlBridge.clipMergeClipTotal > 0
+                        ? Math.min(100, Math.floor(100 * apertarControlBridge.clipMergeClipDone / apertarControlBridge.clipMergeClipTotal)) : 0
+                    width: parent.width
+                    spacing: root.largeLandscapeLayout ? 6 : 4
+                    visible: apertarControlBridge.clipMergeAllClips > 0 && apertarControlBridge.clipMergeAllTotal > 0
+
+                    Text {
+                        width: parent.width
+                        text: apertarControlBridge.clipMergeActiveClip !== ""
+                              ? apertarControlBridge.clipMergeActiveClip + " \u00b7 " + mergeClipProgress.percent + " % ("
+                                + apertarControlBridge.clipMergeClipDone + " / " + apertarControlBridge.clipMergeClipTotal + ")"
+                              : "Waiting"
+                        color: "white"
+                        font.family: interMedium.font.family
+                        font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 12)
+                        renderType: Text.NativeRendering
+                        elide: Text.ElideRight
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: root.largeLandscapeLayout ? 12 : (root.standardLandscapeLayout ? 9 : 8)
+                        radius: height / 2
+                        color: "#1a1a1a"
+                        border.width: 1
+                        border.color: "#1affffff"
+
+                        Rectangle {
+                            width: parent.width * (apertarControlBridge.clipMergeClipTotal > 0
+                                                   ? Math.min(1, apertarControlBridge.clipMergeClipDone / apertarControlBridge.clipMergeClipTotal) : 0)
+                            height: parent.height
+                            radius: parent.radius
+                            color: "#73ffffff"
                         }
                     }
                 }
 
-                Text {
+                Column {
+                    id: mergeAllProgress
+                    readonly property int percent: apertarControlBridge.clipMergeAllTotal > 0
+                        ? Math.min(100, Math.floor(100 * apertarControlBridge.clipMergeAllDone / apertarControlBridge.clipMergeAllTotal)) : 0
                     width: parent.width
-                    visible: !!apertarControlBridge && apertarControlBridge.clipMergeEnabled && apertarControlBridge.clipMergePending === 0
-                             && apertarControlBridge.clipMergeAllClips === 0
-                    text: "Nothing to merge"
-                    color: "#9aa5b1"
-                    font.pixelSize: 12
+                    spacing: root.largeLandscapeLayout ? 6 : 4
+                    visible: apertarControlBridge.clipMergeAllClips > 0 && apertarControlBridge.clipMergeAllTotal > 0
+
+                    Text {
+                        width: parent.width
+                        text: apertarControlBridge.clipMergeAllClips + (apertarControlBridge.clipMergeAllClips === 1 ? " clip" : " clips")
+                              + " \u00b7 " + mergeAllProgress.percent + " %"
+                              + (apertarControlBridge.clipMergePaused !== ""
+                                 ? " \u00b7 paused (" + apertarControlBridge.clipMergePaused + ")"
+                                 : " \u00b7 " + root.clipMergeEtaText(apertarControlBridge.clipMergeEtaS) + " left")
+                        color: "white"
+                        font.family: interMedium.font.family
+                        font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 12)
+                        renderType: Text.NativeRendering
+                        elide: Text.ElideRight
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: root.largeLandscapeLayout ? 12 : (root.standardLandscapeLayout ? 9 : 8)
+                        radius: height / 2
+                        color: "#1a1a1a"
+                        border.width: 1
+                        border.color: "#1affffff"
+
+                        Rectangle {
+                            width: parent.width * (apertarControlBridge.clipMergeAllTotal > 0
+                                                   ? Math.min(1, apertarControlBridge.clipMergeAllDone / apertarControlBridge.clipMergeAllTotal) : 0)
+                            height: parent.height
+                            radius: parent.radius
+                            color: "#73ffffff"
+                        }
+                    }
                 }
             }
         }
@@ -8203,6 +8310,7 @@ Item {
                  || root.timeApplyErrorOpen
                  || root.thermalApplySuccessOpen
                  || root.thermalApplyErrorOpen
+                 || root.mediaSettingErrorOpen
         opacity: root.powerConfirmOpen
                  || root.powerErrorOpen
                  || root.ejectConfirmOpen
@@ -8217,7 +8325,8 @@ Item {
                  || root.timeApplySuccessOpen
                  || root.timeApplyErrorOpen
                  || root.thermalApplySuccessOpen
-                 || root.thermalApplyErrorOpen ? 1.0 : 0.0
+                 || root.thermalApplyErrorOpen
+                 || root.mediaSettingErrorOpen ? 1.0 : 0.0
         z: 20000
 
         Behavior on opacity {
@@ -8241,6 +8350,7 @@ Item {
                 root.timeApplyErrorOpen = false
                 root.thermalApplySuccessOpen = false
                 root.thermalApplyErrorOpen = false
+                root.mediaSettingErrorOpen = false
             }
         }
     }
@@ -10005,6 +10115,83 @@ Item {
 
             Text {
                 text: root.thermalApplyErrorText
+                color: "#8f9096"
+                font.family: interRegular.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 23 : (root.standardLandscapeLayout ? 17 : (root.compactLandscapeLayout ? 12 : 14))
+                wrapMode: Text.WordWrap
+                width: parent.width
+                renderType: Text.NativeRendering
+            }
+
+            Rectangle {
+                width: parent.width
+                height: root.largeLandscapeLayout ? 84 : (root.standardLandscapeLayout ? 64 : (root.compactLandscapeLayout ? 44 : 54))
+                radius: root.largeLandscapeLayout ? 28 : (root.standardLandscapeLayout ? 21 : (root.compactLandscapeLayout ? 14 : 18))
+                color: thermalApplyErrorCloseArea.containsPress ? "#20ffffff" : "#14ffffff"
+                border.width: 1
+                border.color: "#1affffff"
+                scale: thermalApplyErrorCloseArea.containsPress ? 0.985 : 1.0
+
+                Behavior on scale {
+                    NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "OK"
+                    color: "white"
+                    font.family: interMedium.font.family
+                    font.pixelSize: root.largeLandscapeLayout ? 25 : (root.standardLandscapeLayout ? 19 : (root.compactLandscapeLayout ? 13 : 16))
+                    renderType: Text.NativeRendering
+                }
+
+                MouseArea {
+                    id: thermalApplyErrorCloseArea
+                    anchors.fill: parent
+                    onClicked: root.thermalApplyErrorOpen = false
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        width: root.largeLandscapeLayout ? 620 : (root.standardLandscapeLayout ? 470 : (root.compactLandscapeLayout ? 340 : 408))
+        height: root.largeLandscapeLayout ? (mediaSettingErrorColumn.implicitHeight + 74) : (root.standardLandscapeLayout ? (mediaSettingErrorColumn.implicitHeight + 60) : (root.compactLandscapeLayout ? (mediaSettingErrorColumn.implicitHeight + 30) : 246))
+        anchors.centerIn: parent
+        anchors.verticalCenterOffset: -10
+        radius: root.largeLandscapeLayout ? 38 : (root.standardLandscapeLayout ? 30 : (root.compactLandscapeLayout ? 20 : 26))
+        color: "#151515"
+        border.width: 1
+        border.color: "#1affffff"
+        visible: root.mediaSettingErrorOpen
+        opacity: root.mediaSettingErrorOpen ? 1.0 : 0.0
+        scale: root.mediaSettingErrorOpen ? 1.0 : 0.96
+        z: 20002
+
+        Behavior on opacity {
+            NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+        }
+
+        Behavior on scale {
+            NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
+        }
+
+        Column {
+            id: mediaSettingErrorColumn
+            anchors.fill: parent
+            anchors.margins: root.largeLandscapeLayout ? 38 : (root.standardLandscapeLayout ? 30 : (root.compactLandscapeLayout ? 15 : 24))
+            spacing: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 20 : (root.compactLandscapeLayout ? 8 : 16))
+
+            Text {
+                text: "Media Setting Failed"
+                color: "white"
+                font.family: interBold.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 40 : (root.standardLandscapeLayout ? 30 : (root.compactLandscapeLayout ? 20 : 24))
+                renderType: Text.NativeRendering
+            }
+
+            Text {
+                text: root.mediaSettingErrorText
                 color: "#8f9096"
                 font.family: interRegular.font.family
                 font.pixelSize: root.largeLandscapeLayout ? 23 : (root.standardLandscapeLayout ? 17 : (root.compactLandscapeLayout ? 12 : 14))
