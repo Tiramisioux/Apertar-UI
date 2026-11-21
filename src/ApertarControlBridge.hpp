@@ -57,6 +57,18 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(QString autofocusSpeed READ autofocusSpeed NOTIFY autofocusSpeedChanged)
     Q_PROPERTY(QString autofocusWindow READ autofocusWindow NOTIFY autofocusWindowChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    // The second sensor (T65): present only when Core's get_state carries a cam1 object.
+    Q_PROPERTY(bool cam1Present READ cam1Present NOTIFY cam1PresentChanged)
+    Q_PROPERTY(QString cam1State READ cam1State NOTIFY cam1Changed)
+    Q_PROPERTY(QString cam1Message READ cam1Message NOTIFY cam1Changed)
+    Q_PROPERTY(int cam1RecordingDroppedFrames READ cam1RecordingDroppedFrames NOTIFY cam1Changed)
+    Q_PROPERTY(bool cam1Locked READ cam1Locked NOTIFY cam1Changed)
+    Q_PROPERTY(double cam1SkewUs READ cam1SkewUs NOTIFY cam1Changed)
+    Q_PROPERTY(QString cam1Sensor READ cam1Sensor NOTIFY cam1Changed)
+    Q_PROPERTY(bool cam1SensorMono READ cam1SensorMono NOTIFY cam1Changed)
+    // cam1.settings: the same keys as the primary's own settings in get_state.
+    Q_PROPERTY(QVariantMap cam1Settings READ cam1Settings NOTIFY cam1SettingsChanged)
+    Q_PROPERTY(QString recordCameras READ recordCameras NOTIFY recordCamerasChanged)   // cam0 / cam1 / both / none
     Q_PROPERTY(bool recordingHasDroppedFrames READ recordingHasDroppedFrames NOTIFY recordingHealthChanged)
     Q_PROPERTY(int recordingDroppedFrames READ recordingDroppedFrames NOTIFY recordingHealthChanged)
     Q_PROPERTY(double bufferFill READ bufferFill NOTIFY bufferFillChanged)
@@ -69,6 +81,20 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(QString storagePrerollLast READ storagePrerollLast NOTIFY storagePrerollLastChanged)
     Q_PROPERTY(int bufferStopPercent READ bufferStopPercent NOTIFY bufferStopPercentChanged)
     Q_PROPERTY(QString bufferSetting READ bufferSetting NOTIFY bufferSettingChanged)
+    Q_PROPERTY(int framesPerFolder READ framesPerFolder NOTIFY clipSplitChanged)
+    Q_PROPERTY(bool framesPerFolderEnv READ framesPerFolderEnv NOTIFY clipSplitChanged)
+    Q_PROPERTY(bool clipMergeKnown READ clipMergeKnown NOTIFY clipSplitChanged)
+    Q_PROPERTY(bool clipMergeEnabled READ clipMergeEnabled NOTIFY clipSplitChanged)
+    Q_PROPERTY(bool clipMergeEnvOff READ clipMergeEnvOff NOTIFY clipSplitChanged)
+    Q_PROPERTY(QString clipMergeActiveClip READ clipMergeActiveClip NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(QString clipMergePaused READ clipMergePaused NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergePending READ clipMergePending NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeClipDone READ clipMergeClipDone NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeClipTotal READ clipMergeClipTotal NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeAllDone READ clipMergeAllDone NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeAllTotal READ clipMergeAllTotal NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeAllClips READ clipMergeAllClips NOTIFY clipMergeProgressChanged)
+    Q_PROPERTY(int clipMergeEtaS READ clipMergeEtaS NOTIFY clipMergeProgressChanged)
     Q_PROPERTY(QString bufferNote READ bufferNote NOTIFY bufferNoteChanged)
     Q_PROPERTY(QString clipNameTemplate READ clipNameTemplate NOTIFY clipNameChanged)
     Q_PROPERTY(QString clipNameExample READ clipNameExample NOTIFY clipNameChanged)
@@ -121,6 +147,16 @@ public:
     QString proresColorProfile() const { return m_proresColorProfile; }
     QString cdngPreviewColorProfile() const { return m_cdngPreviewColorProfile; }
     QVariantMap previewExposureReference() const { return m_previewExposureReference; }
+    bool cam1Present() const { return m_cam1Present; }
+    QString cam1State() const { return m_cam1State; }
+    QString cam1Message() const { return m_cam1Message; }
+    int cam1RecordingDroppedFrames() const { return m_cam1RecordingDroppedFrames; }
+    bool cam1Locked() const { return m_cam1Locked; }
+    double cam1SkewUs() const { return m_cam1SkewUs; }
+    QString cam1Sensor() const { return m_cam1Sensor; }
+    bool cam1SensorMono() const { return m_cam1SensorMono; }
+    QVariantMap cam1Settings() const { return m_cam1Settings; }
+    QString recordCameras() const { return m_recordCameras; }
     QString cdngCompression() const { return m_cdngCompression; }
     bool rawCompressionSupported() const { return m_rawCompressionSupported; }
     bool rawRecordingSupported() const { return m_rawRecordingSupported; }
@@ -150,6 +186,20 @@ public:
     QString storagePrerollLast() const { return m_storagePrerollLast; }
     int bufferStopPercent() const { return m_bufferStopPercent; }
     QString bufferSetting() const { return m_bufferSetting; }
+    int framesPerFolder() const { return m_framesPerFolder; }
+    bool framesPerFolderEnv() const { return m_framesPerFolderEnv; }
+    bool clipMergeKnown() const { return m_clipMergeKnown; }
+    bool clipMergeEnabled() const { return m_clipMergeEnabled; }
+    bool clipMergeEnvOff() const { return m_clipMergeEnvOff; }
+    QString clipMergeActiveClip() const { return m_clipMergeActiveClip; }
+    QString clipMergePaused() const { return m_clipMergePaused; }
+    int clipMergePending() const { return m_clipMergePending; }
+    int clipMergeClipDone() const { return m_clipMergeClipDone; }
+    int clipMergeClipTotal() const { return m_clipMergeClipTotal; }
+    int clipMergeAllDone() const { return m_clipMergeAllDone; }
+    int clipMergeAllTotal() const { return m_clipMergeAllTotal; }
+    int clipMergeAllClips() const { return m_clipMergeAllClips; }
+    int clipMergeEtaS() const { return m_clipMergeEtaS; }
     QString bufferNote() const { return m_bufferNote; }
     QString clipNameTemplate() const { return m_clipNameTemplate; }
     QString clipNameExample() const { return m_clipNameExample; }
@@ -191,16 +241,18 @@ public:
     Q_INVOKABLE bool applyCdngCompression(const QString &value);
     Q_INVOKABLE bool applyTuningFile(const QString &path);
     Q_INVOKABLE bool applyRawBitDepth(const QString &displayValue);
-    Q_INVOKABLE void applyBufferMode(const QString &value);
-    Q_INVOKABLE void applyStoragePreroll();
-    Q_INVOKABLE void applyStoragePrerollAuto(bool on);
-    Q_INVOKABLE void applyClipNameTemplate(const QString &value);
+    Q_INVOKABLE bool applyBufferMode(const QString &value);
+    Q_INVOKABLE void applyFramesPerFolder(int value);
+    Q_INVOKABLE void applyClipMerge(bool enabled);
+    Q_INVOKABLE bool applyStoragePreroll();
+    Q_INVOKABLE bool applyStoragePrerollAuto(bool on);
+    Q_INVOKABLE bool applyClipNameTemplate(const QString &value);
     Q_INVOKABLE void requestClipNamePreview(const QString &value);
     Q_INVOKABLE bool applyClearHdr(bool enabled);
-    Q_INVOKABLE void applyCdngLog(bool on);
+    Q_INVOKABLE bool applyCdngLog(const QString &value);
     Q_INVOKABLE bool applyH264Resolution(const QString &displayValue);
-    // target: "ui" (what the screens show), "files" (the clips and the audio) or "both"
-    Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue, const QString &target);
+    Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue);
+    Q_INVOKABLE bool applyFileTimecodeMode(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusMode(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusRange(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusSpeed(const QString &displayValue);
@@ -234,6 +286,10 @@ signals:
     void proresColorProfileChanged();
     void cdngPreviewColorProfileChanged();
     void previewExposureReferenceChanged();
+    void cam1PresentChanged();
+    void cam1Changed();
+    void cam1SettingsChanged();
+    void recordCamerasChanged();
     void cdngCompressionChanged();
     void recordingCapabilitiesChanged();
     void tuningFileChanged();
@@ -261,6 +317,8 @@ signals:
     void bufferNoteChanged();
     void cdngLogChanged();
     void clipNameChanged();
+    void clipSplitChanged();
+    void clipMergeProgressChanged();
     void clipNamePreviewChanged();
     void controlsStatusChanged();
     void standbyChanged();
@@ -298,6 +356,8 @@ private:
                          QJsonObject *replyObject = nullptr);
     void applyCoreMessage(const QJsonObject &message);
     void applyCoreState(const QJsonObject &state);
+    void applyCam1State(const QJsonObject &state);
+    void clearCam1State();
     void applyClipNameState(const QJsonObject &state);
     void ensureEventSocketConnected();
     void processEventSocketMessages();
@@ -391,6 +451,17 @@ private:
     QString m_proresColorProfile = QStringLiteral("standard");
     QString m_cdngPreviewColorProfile = QStringLiteral("standard");
     QVariantMap m_previewExposureReference;
+    bool m_cam1Present = false;
+    QString m_cam1State;
+    QString m_cam1Message;
+    int m_cam1RecordingDroppedFrames = 0;
+    bool m_cam1Locked = false;
+    double m_cam1SkewUs = 0.0;
+    QString m_cam1Sensor;
+    bool m_cam1SensorMono = false;
+    QVariantMap m_cam1Settings;
+    QString m_cam1Resolution;
+    QString m_recordCameras;
     QString m_tuningFile;
     QString m_rawBitDepth = QStringLiteral("12-bit");
     bool m_clearHdr = false;
@@ -420,6 +491,23 @@ private:
     bool m_bufferSafetyStop = false; // Core ended the take because the write buffer filled; true until drained
     int m_bufferStopPercent = 0;     // Core's buffer stop threshold in percent, 0 = off
     QString m_bufferSetting; // requested mode from Core's buffer_setting; empty = unknown (control hidden)
+    // Core's [storage] frames_per_folder (0 = one folder; -1 = unknown, row hidden) and clip_merge; *Env = set by the
+    // environment (APERTAR_CDNG_FRAMES_PER_FOLDER / APERTAR_CLIP_MERGE=0), so the tiles are locked.
+    int m_framesPerFolder = -1;
+    bool m_framesPerFolderEnv = false;
+    bool m_clipMergeKnown = false;
+    bool m_clipMergeEnabled = true;
+    bool m_clipMergeEnvOff = false;
+    // Core's merge progress (clip_merge_* in get_state and the clip_merge event; KB clip-merge-progress-plan.md).
+    QString m_clipMergeActiveClip;
+    QString m_clipMergePaused;
+    int m_clipMergePending = 0;
+    int m_clipMergeClipDone = 0;
+    int m_clipMergeClipTotal = 0;
+    int m_clipMergeAllDone = 0;
+    int m_clipMergeAllTotal = 0;
+    int m_clipMergeAllClips = 0;
+    int m_clipMergeEtaS = 0;
     QString m_bufferNote; // Core's buffer_note: why ram was or was not used
     // CineMate Log (Core: cdng_log_bits, cdng_log_available, cdng_log_applied); active = available && bits > 0 && applied.
     int m_cdngLogBits = 0;
@@ -435,6 +523,15 @@ private:
     bool m_fpsSpeedRamp = false; // Core's fps_speed_ramp (T31): FPS may change during a raw take
     bool m_soundRecording = false; // a sound-only take: recording, but not the camera
     bool m_fpsSpeedRampKeepExposure = false;
+    // Kept only for the touch preset (cameraPresetSettings), as m_lossyDngRatio; defaults are Core's.
+    bool m_fpsSpeedRampStretchAudio = true;
+    bool m_fpsSpeedRampReturn = false;
+    bool m_fpsPhaseLock = false;
+    double m_conformFps = 25.0; // the project's timeline rate (Core's conform_fps)
+    int m_hdrThresholdHigh = 4095;
+    int m_hdrThresholdLow = 0;
+    int m_hdrBlend = 5;
+    int m_hdrGainAdder = 1;
     bool m_isoAutoAfterClearHdr = false;
     bool m_whiteBalanceAutoAfterClearHdr = false;
     int m_isoMax = 0;
@@ -450,7 +547,6 @@ private:
     int m_recordingDroppedFrames = 0; // the take's dropped frames, all kinds (Core recording_dropped_frames)
     int m_controlsErrors = 0;
     int m_controlsWarnings = 0;
-    void setControlsStatus(const QJsonObject &object, const QString &errorsKey, const QString &warningsKey);
     bool m_standby = false;
     QString m_coreMediaState;
     bool m_coreMediaAlive = true;

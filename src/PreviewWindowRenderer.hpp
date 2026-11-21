@@ -56,6 +56,7 @@ private:
         unsigned int stride = 0;
         unsigned int captureWidth = 0;
         unsigned int captureHeight = 0;
+        uint64_t lastUseTick = 0;
     };
 
     void scheduleWindowUpdate();
@@ -142,6 +143,9 @@ private:
         QVariantMap exposureReference;
         int displayRotation = 0;
         float previewAspectRatio = 0.0f;
+        float clipLeftFraction = 0.0f;
+        float clipTopFraction = 0.0f;
+        float drawOpacity = 1.0f;
     };
 
     PreviewCacheState currentPreviewState(const PreviewFrameInfo &frame, const QSize &size) const;
@@ -234,6 +238,9 @@ private:
     QElapsedTimer m_shaderTimer;
 
     std::unordered_map<uint64_t, ImportedBuffer> m_importedBuffers;
+    // Counts imports and cache hits; an entry not used for kStaleImportTicks of them belongs to a buffer pool Core has
+    // replaced (a camera reconfigure keeps the preview layout, so cleanupImportedBuffers() does not run).
+    uint64_t m_importUseTick = 0;
     GLuint m_currentTexture = 0;
     GLenum m_currentTextureTarget = GL_TEXTURE_EXTERNAL_OES;
     GLuint m_planarTextures[3] = { 0, 0, 0 };

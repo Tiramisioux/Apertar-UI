@@ -360,6 +360,7 @@ SettingsBridge::SettingsBridge(QObject *parent)
     m_externalMonitorEnabled = m_settings.value("externalMonitorEnabled", false).toBool();
     m_externalMonitorMode = normalizeExternalMonitorMode(
         m_settings.value("externalMonitorMode", "Clean Feed").toString());
+    reloadDualSensorSettings();
     m_externalMonitorInfoOverlay = normalizeExternalMonitorInfoOverlay(
         m_settings.value("externalMonitorInfoOverlay", "On").toString());
     m_externalMonitorOrientation = normalizeExternalMonitorOrientation(
@@ -368,8 +369,9 @@ SettingsBridge::SettingsBridge(QObject *parent)
     m_recordingFrameEnabled = m_settings.value("recordingFrameEnabled", false).toBool();
     m_frameBufferBarEnabled = m_settings.value("frameBufferBarEnabled", false).toBool();
     m_recordingRedTimecodeEnabled = m_settings.value("recordingRedTimecodeEnabled", true).toBool();
-    m_audioRecordedOutlineEnabled = m_settings.value("audioRecordedOutlineEnabled", true).toBool();
+    m_audioRecordedOutlineEnabled = m_settings.value("audioRecordedOutlineEnabled", false).toBool();
     m_timecodeMode = m_settings.value("timecodeMode", "Free Run").toString();
+    m_fileTimecodeSeparate = m_settings.value("fileTimecodeSeparate", false).toBool();
     m_photoModeEnabled = m_settings.value("photoModeEnabled", false).toBool();
     m_photoLongExposureEnabled = m_settings.value("photoLongExposureEnabled", false).toBool();
     m_photoBracketingEnabled = m_settings.value("photoBracketingEnabled", false).toBool();
@@ -593,10 +595,81 @@ void SettingsBridge::pollExternalSettings()
         timecodeMode = QStringLiteral("Free Run");
     }
     setTimecodeMode(timecodeMode);
+    reloadDualSensorSettings();
+    setFileTimecodeSeparate(m_settings.value(QStringLiteral("fileTimecodeSeparate"), m_fileTimecodeSeparate).toBool());
 
     m_settings.sync();
     updateSettingsFileState();
     m_externalSettingsSyncing = false;
+}
+
+// previewSource and cam1Settings are written by the primary (set_preview_source, set_cam1_settings);
+// the UI only follows the file, like the external monitor keys, and never writes them.
+void SettingsBridge::reloadDualSensorSettings()
+{
+    static const QStringList kSources = {
+        QStringLiteral("Cam 0"), QStringLiteral("Cam 1"), QStringLiteral("Both"),
+        QStringLiteral("PiP Cam 0"), QStringLiteral("PiP Cam 1"), QStringLiteral("Both (Cam 1 left)")
+    };
+    const QString source = m_settings.value(QStringLiteral("previewSource"), QStringLiteral("Both")).toString().trimmed();
+    const QString normalizedSource = kSources.contains(source) ? source : QStringLiteral("Both");
+    if (m_previewSource != normalizedSource) {
+        m_previewSource = normalizedSource;
+        emit previewSourceChanged();
+    }
+
+    // "unison", or the tied controls. A QSettings list may come back as a QStringList.
+    const QVariant ties = m_settings.value(QStringLiteral("cam1Settings"), QStringLiteral("unison"));
+    QString tiesText;
+    if (ties.typeId() == QMetaType::QStringList) {
+        QStringList parts;
+        const QStringList raw = ties.toStringList();
+        for (const QString &part : raw) {
+            const QString trimmed = part.trimmed().toLower();
+            if (!trimmed.isEmpty())
+                parts.append(trimmed);
+        }
+        tiesText = parts.join(QLatin1Char(','));
+    } else {
+        tiesText = ties.toString().trimmed().toLower();
+    }
+    if (m_cam1Settings != tiesText) {
+        m_cam1Settings = tiesText;
+        emit cam1SettingsChanged();
+    }
+
+    static const QStringList kShootingModes = {
+        QStringLiteral("Both"), QStringLiteral("Cam 0"), QStringLiteral("Cam 1"), QStringLiteral("Follow preview")
+    };
+    const QString mode = m_settings.value(QStringLiteral("recordCameras"), QStringLiteral("Both")).toString().trimmed();
+    const QString normalizedMode = kShootingModes.contains(mode) ? mode : QStringLiteral("Both");
+    if (m_recordCamerasSetting != normalizedMode) {
+        m_recordCamerasSetting = normalizedMode;
+        emit recordCamerasSettingChanged();
+    }
+
+    // Wipe and stack (A5), written by Core through set_preview_source wipe/stack/opacity/direction.
+    const int wipe = std::clamp(m_settings.value(QStringLiteral("previewWipe"), 0).toInt(), 0, 100);
+    if (m_previewWipe != wipe) {
+        m_previewWipe = wipe;
+        emit previewWipeChanged();
+    }
+    const bool vertical = m_settings.value(QStringLiteral("previewWipeDirection"), QStringLiteral("Horizontal"))
+                              .toString().trimmed().compare(QStringLiteral("Vertical"), Qt::CaseInsensitive) == 0;
+    if (m_previewWipeVertical != vertical) {
+        m_previewWipeVertical = vertical;
+        emit previewWipeVerticalChanged();
+    }
+    const bool stack = m_settings.value(QStringLiteral("previewStack"), false).toBool();
+    if (m_previewStack != stack) {
+        m_previewStack = stack;
+        emit previewStackChanged();
+    }
+    const int opacity = std::clamp(m_settings.value(QStringLiteral("previewOpacity"), 50).toInt(), 0, 100);
+    if (m_previewOpacity != opacity) {
+        m_previewOpacity = opacity;
+        emit previewOpacityChanged();
+    }
 }
 
 bool SettingsBridge::zebraEnabled() const
@@ -1198,6 +1271,11 @@ void SettingsBridge::setRecordingRedTimecodeEnabled(bool value)
     emit recordingRedTimecodeEnabledChanged();
 }
 
+bool SettingsBridge::recordingRedTimecodeSet() const
+{
+    return m_settings.contains(QStringLiteral("recordingRedTimecodeEnabled"));
+}
+
 bool SettingsBridge::audioRecordedOutlineEnabled() const
 {
     return m_audioRecordedOutlineEnabled;
@@ -1230,6 +1308,23 @@ void SettingsBridge::setTimecodeMode(const QString &value)
     m_settings.sync();
     updateSettingsFileState();
     emit timecodeModeChanged();
+}
+
+bool SettingsBridge::fileTimecodeSeparate() const
+{
+    return m_fileTimecodeSeparate;
+}
+
+void SettingsBridge::setFileTimecodeSeparate(bool value)
+{
+    if (m_fileTimecodeSeparate == value)
+        return;
+
+    m_fileTimecodeSeparate = value;
+    if (!m_externalSettingsSyncing) m_settings.setValue("fileTimecodeSeparate", value);
+    m_settings.sync();
+    updateSettingsFileState();
+    emit fileTimecodeSeparateChanged();
 }
 
 bool SettingsBridge::photoModeEnabled() const
@@ -2172,6 +2267,7 @@ QJsonObject SettingsBridge::serializeCurrentSettings() const
     settingsObject.insert(QStringLiteral("recordingRedTimecodeEnabled"), m_recordingRedTimecodeEnabled);
     settingsObject.insert(QStringLiteral("audioRecordedOutlineEnabled"), m_audioRecordedOutlineEnabled);
     settingsObject.insert(QStringLiteral("timecodeMode"), m_timecodeMode);
+    settingsObject.insert(QStringLiteral("fileTimecodeSeparate"), m_fileTimecodeSeparate);
     settingsObject.insert(QStringLiteral("photoModeEnabled"), m_photoModeEnabled);
     settingsObject.insert(QStringLiteral("photoLongExposureEnabled"), m_photoLongExposureEnabled);
     settingsObject.insert(QStringLiteral("photoBracketingEnabled"), m_photoBracketingEnabled);
@@ -2264,6 +2360,7 @@ bool SettingsBridge::applySettingsObject(const QJsonObject &settingsObject, QStr
     setRecordingRedTimecodeEnabled(boolValue(settingsObject, "recordingRedTimecodeEnabled", m_recordingRedTimecodeEnabled));
     setAudioRecordedOutlineEnabled(boolValue(settingsObject, "audioRecordedOutlineEnabled", m_audioRecordedOutlineEnabled));
     setTimecodeMode(stringValue(settingsObject, "timecodeMode", m_timecodeMode));
+    setFileTimecodeSeparate(boolValue(settingsObject, "fileTimecodeSeparate", m_fileTimecodeSeparate));
     setPhotoModeEnabled(boolValue(settingsObject, "photoModeEnabled", m_photoModeEnabled));
     setPhotoLongExposureEnabled(boolValue(settingsObject, "photoLongExposureEnabled", m_photoLongExposureEnabled));
     setPhotoBracketingEnabled(boolValue(settingsObject, "photoBracketingEnabled", m_photoBracketingEnabled));

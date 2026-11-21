@@ -2397,6 +2397,13 @@ Item {
         return null
     }
 
+    // The merge's time left: "under a minute", "about 4 min", "about 1 h 20 min".
+    function clipMergeEtaText(seconds) {
+        if (seconds < 60) return "under a minute"
+        if (seconds < 5400) return "about " + Math.round(seconds / 60) + " min"
+        return "about " + Math.floor(seconds / 3600) + " h " + Math.round((seconds % 3600) / 60) + " min"
+    }
+
     function powerComponentForId(itemId) {
         if (itemId === "media") return systemMediaComponent
         if (itemId === "formatMedia") return systemFormatMediaComponent
@@ -2990,7 +2997,7 @@ Item {
             dropdownController: sharedDropdownController
             title: "Audio Recording Outline"
             description: "A faint red outline on the audio meter when sound is recorded with the clips."
-            enabled: root.settingsState ? root.settingsState.audioRecordedOutlineEnabled : true
+            enabled: root.settingsState ? root.settingsState.audioRecordedOutlineEnabled : false
             onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
             onToggleRequested: {
                 if (root.settingsState)
@@ -3277,6 +3284,7 @@ Item {
                 readonly property int activeFieldCount: 3
                                                         + ((root.processedVideoRecordFormat || root.sensorCropControlsAvailable) ? 1 : 0)
                                                         + (root.cdngRecordFormat ? 1 : 0)
+                                                        + (root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable ? 1 : 0)
                 readonly property int activeRowCount: Math.ceil(activeFieldCount / columns)
 
                 width: parent.width
@@ -3412,6 +3420,36 @@ Item {
                     onValueSelected: function(v) { apertarControlBridge.applyCdngCompression(v) }
                 }
 
+                InlineDropdownField {
+                    width: (parent.width - 12) / 2
+                    visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
+                    label: "Log"
+                    value: apertarControlBridge && apertarControlBridge.cdngLogOn ? "auto" : "off"
+                    displayValue: value === "auto" ? "On" : "Off"
+                    options: [
+                        { value: "off", label: "Off" },
+                        { value: "auto", label: "On" }
+                    ]
+                    fieldEnabled: apertarControlBridge && !apertarControlBridge.recording
+                    popupParent: dropdownOverlay
+                    dropdownController: sharedDropdownController
+                    onValueSelected: function(v) { apertarControlBridge.applyCdngLog(v) }
+                }
+
+            }
+
+            Text {
+                width: parent.width
+                visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
+                text: !apertarControlBridge.cdngLogOn ? "Linear storage"
+                      : (apertarControlBridge.cdngLogApplied
+                         ? (apertarControlBridge.cdngLogBits > 0
+                            ? "Stores one step down (" + apertarControlBridge.cdngLogBits + "-bit)"
+                            : "One step down")
+                         : "Not applied: in SDR the sensor chip already compresses the raw stream; Log works in Clear HDR. Files stay linear.")
+                color: "#9aa5b1"
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
             }
 
             Column {
@@ -3420,32 +3458,19 @@ Item {
                 visible: (root.cdngRecordFormat || root.recordFormat === "MLV")
                          && !!apertarControlBridge && apertarControlBridge.bufferSetting !== ""
 
-                Text {
+                InlineDropdownField {
                     width: parent.width
-                    text: "Write Buffer"
-                    color: "white"
-                    font.pixelSize: 14
-                }
-
-                Row {
-                    width: parent.width
-                    spacing: 12
-
-                    ActionTile {
-                        width: (parent.width - 12) / 2
-                        label: "Frames"
-                        tone: apertarControlBridge.bufferSetting === "frames" ? "accent" : "default"
-                        actionEnabled: !apertarControlBridge.recording
-                        onClicked: apertarControlBridge.applyBufferMode("frames")
-                    }
-
-                    ActionTile {
-                        width: (parent.width - 12) / 2
-                        label: "RAM"
-                        tone: apertarControlBridge.bufferSetting === "ram" ? "accent" : "default"
-                        actionEnabled: !apertarControlBridge.recording
-                        onClicked: apertarControlBridge.applyBufferMode("ram")
-                    }
+                    label: "Write Buffer"
+                    value: apertarControlBridge ? apertarControlBridge.bufferSetting : "frames"
+                    displayValue: value === "ram" ? "RAM" : "Frames"
+                    options: [
+                        { value: "frames", label: "Frames" },
+                        { value: "ram", label: "RAM" }
+                    ]
+                    fieldEnabled: apertarControlBridge && !apertarControlBridge.recording
+                    popupParent: dropdownOverlay
+                    dropdownController: sharedDropdownController
+                    onValueSelected: function(v) { apertarControlBridge.applyBufferMode(v) }
                 }
 
                 Text {
@@ -3454,40 +3479,6 @@ Item {
                           : (apertarControlBridge.bufferMode === "ram" ? "Large RAM buffer in use"
                              : "Takes effect at the next take"
                                + (apertarControlBridge.bufferNote !== "" ? " \u00b7 " + apertarControlBridge.bufferNote : ""))
-                    color: "#9aa5b1"
-                    font.pixelSize: 12
-                    wrapMode: Text.WordWrap
-                }
-            }
-
-            Column {
-                width: parent.width
-                spacing: 8
-                visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
-
-                Text {
-                    width: parent.width
-                    text: "Log"
-                    color: "white"
-                    font.pixelSize: 14
-                }
-
-                ActionTile {
-                    width: (parent.width - 12) / 2
-                    label: apertarControlBridge.cdngLogOn ? "On" : "Off"
-                    tone: apertarControlBridge.cdngLogOn ? "accent" : "default"
-                    actionEnabled: !apertarControlBridge.recording
-                    onClicked: apertarControlBridge.applyCdngLog(!apertarControlBridge.cdngLogOn)
-                }
-
-                Text {
-                    width: parent.width
-                    text: !apertarControlBridge.cdngLogOn ? "Linear storage"
-                          : (apertarControlBridge.cdngLogApplied
-                             ? (apertarControlBridge.cdngLogBits > 0
-                                ? "Stores one step down (" + apertarControlBridge.cdngLogBits + "-bit)"
-                                : "One step down")
-                             : "Not applied: in SDR the sensor chip already compresses the raw stream; Log works in Clear HDR. Files stay linear.")
                     color: "#9aa5b1"
                     font.pixelSize: 12
                     wrapMode: Text.WordWrap
@@ -3997,7 +3988,7 @@ Item {
 
             InlineDropdownField {
                 width: parent.width
-                label: "UI timecode"
+                label: "Mode"
                 value: root.settingsState ? root.settingsState.timecodeMode : "Free Run"
                 displayValue: root.timecodeDisplayName(value)
                 options: root.timecodeChoices
@@ -4007,23 +3998,32 @@ Item {
                 onValueSelected: function(v) {
                     if (root.settingsState)
                         root.settingsState.timecodeMode = v
+                    if (root.settingsState && root.settingsState.fileTimecodeSeparate)
+                        return
                     if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
-                        apertarControlBridge.applyTimecodeMode(v, "ui")
+                        apertarControlBridge.applyTimecodeMode(v)
                 }
             }
 
             InlineDropdownField {
                 width: parent.width
-                label: "File timecode"
-                value: (typeof apertarControlBridge !== "undefined" && apertarControlBridge) ? apertarControlBridge.fileTimecodeMode : "Free Run"
-                displayValue: root.timecodeDisplayName(value)
-                options: root.timecodeChoices
+                label: "Files"
+                value: root.settingsState && root.settingsState.fileTimecodeSeparate
+                       && typeof apertarControlBridge !== "undefined" && apertarControlBridge
+                       ? apertarControlBridge.fileTimecodeMode : "Same as Mode"
+                displayValue: value === "Same as Mode" ? value : root.timecodeDisplayName(value)
+                options: ["Same as Mode"].concat(root.timecodeChoices)
                 openUpwards: true
                 popupParent: dropdownOverlay
                 dropdownController: sharedDropdownController
                 onValueSelected: function(v) {
-                    if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
-                        apertarControlBridge.applyTimecodeMode(v, "files")
+                    if (typeof apertarControlBridge === "undefined" || !apertarControlBridge)
+                        return
+                    // A fixed value sets the files apart; Same as Mode sends no target, so Core sets both again.
+                    if (v === "Same as Mode")
+                        apertarControlBridge.applyTimecodeMode(root.settingsState ? root.settingsState.timecodeMode : "Free Run")
+                    else
+                        apertarControlBridge.applyFileTimecodeMode(v)
                 }
             }
         }
@@ -5385,6 +5385,135 @@ Item {
                 label: "Eject Media"
                 actionEnabled: mediaBridge.mediaMounted
                 onClicked: root.openEjectConfirmation()
+            }
+
+            // [storage] frames_per_folder: Off (0, one folder) or N frames per part_NNN folder; a value set in the config file
+            // and not in the list is offered too (the WebUI's Media card has the same choice).
+            InlineDropdownField {
+                width: parent.width
+                visible: !!apertarControlBridge && apertarControlBridge.framesPerFolder >= 0
+                label: apertarControlBridge && apertarControlBridge.framesPerFolderEnv
+                       ? "Split Long Takes (set by APERTAR_CDNG_FRAMES_PER_FOLDER)" : "Split Long Takes"
+                value: apertarControlBridge ? String(apertarControlBridge.framesPerFolder) : "0"
+                displayValue: value === "0" ? "Off" : value + " frames per folder"
+                options: {
+                    var list = [{ value: "0", label: "Off" }]
+                    var presets = [1000, 2000, 5000, 10000]
+                    var current = apertarControlBridge ? apertarControlBridge.framesPerFolder : 0
+                    if (current > 0 && presets.indexOf(current) < 0) {
+                        presets.push(current)
+                        presets.sort(function(a, b) { return a - b })
+                    }
+                    for (var i = 0; i < presets.length; ++i)
+                        list.push({ value: String(presets[i]), label: presets[i] + " frames per folder" })
+                    return list
+                }
+                fieldEnabled: !!apertarControlBridge && !apertarControlBridge.framesPerFolderEnv
+                popupParent: dropdownOverlay
+                dropdownController: sharedDropdownController
+                onValueSelected: function(v) { apertarControlBridge.applyFramesPerFolder(parseInt(v, 10)) }
+            }
+
+            // [storage] clip_merge: joins the part folders of split clips when the camera is idle.
+            Column {
+                width: parent.width
+                spacing: 8
+                visible: !!apertarControlBridge && apertarControlBridge.clipMergeKnown
+
+                Text {
+                    width: parent.width
+                    text: "Merge Split Clips"
+                    color: "white"
+                    font.pixelSize: 14
+                }
+
+                Row {
+                    width: parent.width
+                    spacing: 12
+
+                    ActionTile {
+                        width: (parent.width - 12) / 2
+                        label: "On"
+                        tone: apertarControlBridge.clipMergeEnabled ? "accent" : "default"
+                        actionEnabled: !apertarControlBridge.clipMergeEnvOff && !apertarControlBridge.clipMergeEnabled
+                        onClicked: apertarControlBridge.applyClipMerge(true)
+                    }
+
+                    ActionTile {
+                        width: (parent.width - 12) / 2
+                        label: "Off"
+                        tone: !apertarControlBridge.clipMergeEnabled ? "accent" : "default"
+                        actionEnabled: !apertarControlBridge.clipMergeEnvOff && apertarControlBridge.clipMergeEnabled
+                        onClicked: apertarControlBridge.applyClipMerge(false)
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    text: (apertarControlBridge.clipMergeEnvOff ? "Turned off by APERTAR_CLIP_MERGE \u00b7 " : "")
+                          + (apertarControlBridge.clipMergeEnabled
+                             ? "Joins the parts into one folder when the camera is idle; pauses when a take starts"
+                             : "Split clips stay in their part folders")
+                    color: "#9aa5b1"
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
+
+                Repeater {
+                    // Current clip, then all clips (KB clip-merge-progress-plan.md), in the merge grey.
+                    model: apertarControlBridge && apertarControlBridge.clipMergeEnabled && apertarControlBridge.clipMergeAllClips > 0
+                           && apertarControlBridge.clipMergeAllTotal > 0 ? 2 : 0
+
+                    Column {
+                        readonly property bool clipRow: index === 0
+                        readonly property int done: clipRow ? apertarControlBridge.clipMergeClipDone : apertarControlBridge.clipMergeAllDone
+                        readonly property int total: clipRow ? apertarControlBridge.clipMergeClipTotal : apertarControlBridge.clipMergeAllTotal
+                        readonly property int percent: total > 0 ? Math.min(100, Math.floor(100 * done / total)) : 0
+                        width: parent.width
+                        spacing: 4
+
+                        Text {
+                            width: parent.width
+                            text: clipRow
+                                  ? (apertarControlBridge.clipMergeActiveClip !== ""
+                                     ? apertarControlBridge.clipMergeActiveClip + " \u00b7 " + percent + " % (" + done + " / " + total + ")"
+                                     : "Waiting")
+                                  : (apertarControlBridge.clipMergeAllClips + (apertarControlBridge.clipMergeAllClips === 1 ? " clip" : " clips")
+                                     + " \u00b7 " + percent + " %"
+                                     + (apertarControlBridge.clipMergePaused !== ""
+                                        ? " \u00b7 paused (" + apertarControlBridge.clipMergePaused + ")"
+                                        : " \u00b7 " + root.clipMergeEtaText(apertarControlBridge.clipMergeEtaS) + " left"))
+                            color: "#d7d9de"
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 8
+                            radius: height / 2
+                            color: "#1a1a1a"
+                            border.width: 1
+                            border.color: "#1affffff"
+
+                            Rectangle {
+                                width: parent.width * (parent.parent.total > 0 ? Math.min(1, parent.parent.done / parent.parent.total) : 0)
+                                height: parent.height
+                                radius: parent.radius
+                                color: "#73ffffff"   // the READY pill's merge grey, a little stronger on the dark track
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    visible: !!apertarControlBridge && apertarControlBridge.clipMergeEnabled && apertarControlBridge.clipMergePending === 0
+                             && apertarControlBridge.clipMergeAllClips === 0
+                    text: "Nothing to merge"
+                    color: "#9aa5b1"
+                    font.pixelSize: 12
+                }
             }
         }
     }

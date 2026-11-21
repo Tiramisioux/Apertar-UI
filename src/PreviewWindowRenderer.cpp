@@ -418,6 +418,9 @@ void PreviewWindowRenderer::syncState()
             disconnect(m_bridge, nullptr, this, nullptr);
 
         m_bridge = newBridge;
+        // A pane given the other camera must not keep the old camera's last frame.
+        m_resetPreviewState = true;
+        m_loggedRenderUnavailable = false;
 
         if (m_bridge)
             connectBridgeSignals(m_bridge);
@@ -1670,6 +1673,7 @@ void PreviewWindowRenderer::ensureImported(const PreviewFrameInfo &frame)
                 existing.captureHeight == frame.captureHeight;
 
             if (matchesFrame) {
+                it->second.lastUseTick = ++m_importUseTick;
                 m_currentTexture = existing.texture;
                 m_currentTextureTarget = GL_TEXTURE_EXTERNAL_OES;
                 m_currentTextureIsPlanar = false;
@@ -1804,6 +1808,31 @@ void PreviewWindowRenderer::ensureImported(const PreviewFrameInfo &frame)
         imported.stride = stride;
         imported.captureWidth = frame.captureWidth;
         imported.captureHeight = frame.captureHeight;
+        imported.lastUseTick = ++m_importUseTick;
+
+        // Release the imports of buffers Core no longer sends. Each holds an EGLImage, a texture and dup()ed dmabuf fds;
+        // without this every camera reconfigure left the old pool behind (16 buffers x 3 fds) until the process ran out
+        // of fds and Mesa logged "Failed to export gem bo to dmabuf". A live buffer is seen every pool-size frames.
+        constexpr uint64_t kStaleImportTicks = 64;
+        for (auto staleIt = m_importedBuffers.begin(); staleIt != m_importedBuffers.end();) {
+            if (m_importUseTick - staleIt->second.lastUseTick <= kStaleImportTicks) {
+                ++staleIt;
+                continue;
+            }
+            auto destroyStaleImage = reinterpret_cast<PFNEGLDESTROYIMAGEKHRPROC>(eglGetProcAddress("eglDestroyImageKHR"));
+            const ImportedBuffer &old = staleIt->second;
+            if (old.texture)
+                glDeleteTextures(1, &old.texture);
+            if (old.image != EGL_NO_IMAGE_KHR && destroyStaleImage && dpy != EGL_NO_DISPLAY)
+                destroyStaleImage(dpy, old.image);
+            for (int fd : old.dupFds) {
+                if (fd >= 0)
+                    close(fd);
+            }
+            if (old.dupFd >= 0)
+                close(old.dupFd);
+            staleIt = m_importedBuffers.erase(staleIt);
+        }
 
         m_importedBuffers.emplace(frameBufferKey, imported);
         m_currentTexture = texture;
@@ -1921,6 +1950,9 @@ PreviewWindowRenderer::PreviewCacheState PreviewWindowRenderer::currentPreviewSt
         state.lutPreviewFile = lutFile.isEmpty() ? QString() : QDir::cleanPath(lutFile);
         state.displayRotation = m_item->displayRotation();
         state.previewAspectRatio = m_item->previewAspectRatio();
+        state.clipLeftFraction = float(std::clamp<qreal>(m_item->clipLeftFraction(), 0.0, 1.0));
+        state.clipTopFraction = float(std::clamp<qreal>(m_item->clipTopFraction(), 0.0, 1.0));
+        state.drawOpacity = float(std::clamp<qreal>(m_item->drawOpacity(), 0.0, 1.0));
     }
 
     if (state.smpteEnabled) {
@@ -1963,7 +1995,10 @@ bool PreviewWindowRenderer::previewStateChanged(const PreviewCacheState &state) 
         || cached.lutPreviewFile != state.lutPreviewFile
         || cached.exposureReference != state.exposureReference
         || cached.displayRotation != state.displayRotation
-        || !qFuzzyCompare(cached.previewAspectRatio + 1.0f, state.previewAspectRatio + 1.0f);
+        || !qFuzzyCompare(cached.previewAspectRatio + 1.0f, state.previewAspectRatio + 1.0f)
+        || !qFuzzyCompare(cached.clipLeftFraction + 1.0f, state.clipLeftFraction + 1.0f)
+        || !qFuzzyCompare(cached.clipTopFraction + 1.0f, state.clipTopFraction + 1.0f)
+        || !qFuzzyCompare(cached.drawOpacity + 1.0f, state.drawOpacity + 1.0f);
 }
 
 void PreviewWindowRenderer::renderProcessedPreview(const PreviewFrameInfo &frame, const QSize &size)
@@ -2284,6 +2319,27 @@ void PreviewWindowRenderer::renderDirectToWindow(const PreviewFrameInfo &frame, 
     const GLuint activeProgram = usePassthrough ? passthroughProgram : processProgram;
     if (!activeProgram)
         return;
+
+    // Wipe and stack (A5). The scissor cuts away the left and top fractions of the picture's rect
+    // (window pixels, GL origin bottom-left: the top edge is y = winH, so a top cut shortens the height
+    // and keeps dstBottom). The blend mixes this draw over what the window already holds, with a
+    // constant alpha. Both are switched off again right after the draw, so the next item starts clean
+    // (the function disabled scissor and blend above, so "off" is the state it found).
+    const bool wipeClipped = state.clipLeftFraction > 0.0f || state.clipTopFraction > 0.0f;
+    const bool wipeBlended = state.drawOpacity < 1.0f;
+    if (wipeClipped) {
+        const GLint cutX = GLint(std::round(float(targetSize.width()) * state.clipLeftFraction));
+        const GLint cutY = GLint(std::round(float(targetSize.height()) * state.clipTopFraction));
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(dstLeft + cutX, dstBottom,
+                  std::max(0, targetSize.width() - cutX),
+                  std::max(0, targetSize.height() - cutY));
+    }
+    if (wipeBlended) {
+        glEnable(GL_BLEND);
+        glBlendColor(0.0f, 0.0f, 0.0f, state.drawOpacity);
+        glBlendFunc(GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA);
+    }
     const GLint activePosLoc = usePassthrough
         ? (planarTexture ? m_passthroughPlanarPosLoc : (cpuTexture ? m_passthrough2DPosLoc : m_passthroughPosLoc))
         : (planarTexture ? m_processPlanarPosLoc : (cpuTexture ? m_process2DPosLoc : m_processPosLoc));
@@ -2365,6 +2421,13 @@ void PreviewWindowRenderer::renderDirectToWindow(const PreviewFrameInfo &frame, 
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+    if (wipeBlended) {
+        glDisable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ZERO);
+    }
+    if (wipeClipped)
+        glDisable(GL_SCISSOR_TEST);
+
     if (!usePassthrough) {
         glActiveTexture(GL_TEXTURE3);
         glBindTexture(GL_TEXTURE_2D, 0);
@@ -2391,6 +2454,11 @@ void PreviewWindowRenderer::render()
         return;
 
     m_updatePending = false;
+
+    // A hidden item draws and imports nothing (the cam1 pane when its layout is off).
+    if (!m_item->isVisible())
+        return;
+
     m_window->beginExternalCommands();
 
     initialize();

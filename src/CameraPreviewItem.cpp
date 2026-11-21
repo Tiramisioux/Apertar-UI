@@ -259,3 +259,42 @@ void CameraPreviewItem::setPreviewAspectRatio(float value)
     if (window())
         window()->update();
 }
+
+void CameraPreviewItem::setClipLeftFraction(qreal value)
+{
+    value = std::isfinite(value) ? std::clamp<qreal>(value, 0.0, 1.0) : 0.0;
+    if (qFuzzyCompare(m_clipLeftFraction + 1.0, value + 1.0))
+        return;
+
+    m_clipLeftFraction = value;
+    emit clipLeftFractionChanged();
+
+    if (window())
+        window()->update();
+}
+
+void CameraPreviewItem::setClipTopFraction(qreal value)
+{
+    value = std::isfinite(value) ? std::clamp<qreal>(value, 0.0, 1.0) : 0.0;
+    if (qFuzzyCompare(m_clipTopFraction + 1.0, value + 1.0))
+        return;
+
+    m_clipTopFraction = value;
+    emit clipTopFractionChanged();
+
+    if (window())
+        window()->update();
+}
+
+void CameraPreviewItem::setDrawOpacity(qreal value)
+{
+    value = std::isfinite(value) ? std::clamp<qreal>(value, 0.0, 1.0) : 1.0;
+    if (qFuzzyCompare(m_drawOpacity + 1.0, value + 1.0))
+        return;
+
+    m_drawOpacity = value;
+    emit drawOpacityChanged();
+
+    if (window())
+        window()->update();
+}

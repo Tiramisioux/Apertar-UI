@@ -44,12 +44,19 @@ inline QStringList dngFramesOfClip(const QDir &clipDir, const QStringList &filte
 {
     QStringList frames = clipDir.entryList(filters, fileFilters, QDir::Name);
     const QStringList dirs = clipDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks, QDir::Name);
+    bool split = false;
     for (const QString &part : dirs) {
         if (!isPartDirName(part))
             continue;
+        split = true;
         const QDir partDir(clipDir.absoluteFilePath(part));
         for (const QString &name : partDir.entryList(filters, fileFilters, QDir::Name))
             frames.append(part + QLatin1Char('/') + name);
+    }
+    if (split) {
+        // The merge may have moved frames into the clip folder after it was read and before their part was: read it
+        // again (frames only move part -> clip folder, so each is in one of the reads), and keep one entry per name.
+        frames.append(clipDir.entryList(filters, fileFilters, QDir::Name));
     }
     QCollator collator;
     collator.setNumericMode(true);
@@ -60,7 +67,24 @@ inline QStringList dngFramesOfClip(const QDir &clipDir, const QStringList &filte
     std::stable_sort(frames.begin(), frames.end(), [&](const QString &lhs, const QString &rhs) {
         return collator.compare(fileName(lhs), fileName(rhs)) < 0;
     });
+    if (split)
+        frames.erase(std::unique(frames.begin(), frames.end(), [&](const QString &lhs, const QString &rhs) {
+                         return fileName(lhs) == fileName(rhs);
+                     }), frames.end());
     return frames;
+}
+
+// A frame listed as <clip>/part_NNN/<name> that the merge has since moved: the same name in the clip folder (frames
+// only move that way). Any other path, or one that exists, comes back unchanged.
+inline QString existingFramePath(const QString &framePath)
+{
+    if (QFileInfo::exists(framePath))
+        return framePath;
+    const QFileInfo info(framePath);
+    if (!isPartDirName(info.dir().dirName()))
+        return framePath;
+    const QString moved = clipDirForFrame(framePath).absoluteFilePath(info.fileName());
+    return QFileInfo::exists(moved) ? moved : framePath;
 }
 
 } // namespace apertar::clipframes

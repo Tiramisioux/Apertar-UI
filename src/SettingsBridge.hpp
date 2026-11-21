@@ -46,6 +46,15 @@ class SettingsBridge : public QObject
     Q_PROPERTY(QString cameraControlsMode READ cameraControlsMode WRITE setCameraControlsMode NOTIFY cameraControlsModeChanged)
     Q_PROPERTY(bool externalMonitorEnabled READ externalMonitorEnabled WRITE setExternalMonitorEnabled NOTIFY externalMonitorEnabledChanged)
     Q_PROPERTY(QString externalMonitorMode READ externalMonitorMode WRITE setExternalMonitorMode NOTIFY externalMonitorModeChanged)
+    // Dual sensor, written by the primary and read here (T66): HDMI 0's view, and cam1's ties.
+    Q_PROPERTY(QString previewSource READ previewSource NOTIFY previewSourceChanged)
+    Q_PROPERTY(QString cam1Settings READ cam1Settings NOTIFY cam1SettingsChanged)
+    // The shooting mode (UI.conf recordCameras): Both, Cam 0, Cam 1 or Follow preview.
+    Q_PROPERTY(QString recordCamerasSetting READ recordCamerasSetting NOTIFY recordCamerasSettingChanged)
+    Q_PROPERTY(int previewWipe READ previewWipe NOTIFY previewWipeChanged)
+    Q_PROPERTY(bool previewWipeVertical READ previewWipeVertical NOTIFY previewWipeVerticalChanged)
+    Q_PROPERTY(bool previewStack READ previewStack NOTIFY previewStackChanged)
+    Q_PROPERTY(int previewOpacity READ previewOpacity NOTIFY previewOpacityChanged)
     Q_PROPERTY(QString externalMonitorInfoOverlay READ externalMonitorInfoOverlay WRITE setExternalMonitorInfoOverlay NOTIFY externalMonitorInfoOverlayChanged)
     Q_PROPERTY(QString externalMonitorOrientation READ externalMonitorOrientation WRITE setExternalMonitorOrientation NOTIFY externalMonitorOrientationChanged)
     Q_PROPERTY(bool dateTimeOverlayEnabled READ dateTimeOverlayEnabled WRITE setDateTimeOverlayEnabled NOTIFY dateTimeOverlayEnabledChanged)
@@ -53,8 +62,12 @@ class SettingsBridge : public QObject
     Q_PROPERTY(bool recordingFrameEnabled READ recordingFrameEnabled WRITE setRecordingFrameEnabled NOTIFY recordingFrameEnabledChanged)
     Q_PROPERTY(bool frameBufferBarEnabled READ frameBufferBarEnabled WRITE setFrameBufferBarEnabled NOTIFY frameBufferBarEnabledChanged)
     Q_PROPERTY(bool recordingRedTimecodeEnabled READ recordingRedTimecodeEnabled WRITE setRecordingRedTimecodeEnabled NOTIFY recordingRedTimecodeEnabledChanged)
+    // True once recordingRedTimecodeEnabled is stored in UI.conf; until then HDMI keeps the white timecode of 1.6.0.
+    Q_PROPERTY(bool recordingRedTimecodeSet READ recordingRedTimecodeSet NOTIFY recordingRedTimecodeEnabledChanged)
     Q_PROPERTY(bool audioRecordedOutlineEnabled READ audioRecordedOutlineEnabled WRITE setAudioRecordedOutlineEnabled NOTIFY audioRecordedOutlineEnabledChanged)
     Q_PROPERTY(QString timecodeMode READ timecodeMode WRITE setTimecodeMode NOTIFY timecodeModeChanged)
+    // Written by Core's set_timecode_mode: true once the file timecode is set apart from timecodeMode.
+    Q_PROPERTY(bool fileTimecodeSeparate READ fileTimecodeSeparate WRITE setFileTimecodeSeparate NOTIFY fileTimecodeSeparateChanged)
     Q_PROPERTY(bool photoModeEnabled READ photoModeEnabled WRITE setPhotoModeEnabled NOTIFY photoModeEnabledChanged)
     Q_PROPERTY(bool photoLongExposureEnabled READ photoLongExposureEnabled WRITE setPhotoLongExposureEnabled NOTIFY photoLongExposureEnabledChanged)
     Q_PROPERTY(bool photoBracketingEnabled READ photoBracketingEnabled WRITE setPhotoBracketingEnabled NOTIFY photoBracketingEnabledChanged)
@@ -187,6 +200,13 @@ public:
     void setExternalMonitorEnabled(bool value);
 
     QString externalMonitorMode() const;
+    QString previewSource() const { return m_previewSource; }
+    QString cam1Settings() const { return m_cam1Settings; }
+    QString recordCamerasSetting() const { return m_recordCamerasSetting; }
+    int previewWipe() const { return m_previewWipe; }
+    bool previewWipeVertical() const { return m_previewWipeVertical; }
+    bool previewStack() const { return m_previewStack; }
+    int previewOpacity() const { return m_previewOpacity; }
     void setExternalMonitorMode(const QString &value);
 
     QString externalMonitorInfoOverlay() const;
@@ -203,11 +223,14 @@ public:
     void setFrameBufferBarEnabled(bool value);
     bool recordingRedTimecodeEnabled() const;
     void setRecordingRedTimecodeEnabled(bool value);
+    bool recordingRedTimecodeSet() const;
     bool audioRecordedOutlineEnabled() const;
     void setAudioRecordedOutlineEnabled(bool value);
 
     QString timecodeMode() const;
     void setTimecodeMode(const QString &value);
+    bool fileTimecodeSeparate() const;
+    void setFileTimecodeSeparate(bool value);
 
     bool photoModeEnabled() const;
     void setPhotoModeEnabled(bool value);
@@ -363,6 +386,13 @@ signals:
     void cameraControlsModeChanged();
     void externalMonitorEnabledChanged();
     void externalMonitorModeChanged();
+    void previewSourceChanged();
+    void cam1SettingsChanged();
+    void recordCamerasSettingChanged();
+    void previewWipeChanged();
+    void previewWipeVerticalChanged();
+    void previewStackChanged();
+    void previewOpacityChanged();
     void externalMonitorInfoOverlayChanged();
     void externalMonitorOrientationChanged();
     void dateTimeOverlayEnabledChanged();
@@ -371,6 +401,7 @@ signals:
     void recordingRedTimecodeEnabledChanged();
     void audioRecordedOutlineEnabledChanged();
     void timecodeModeChanged();
+    void fileTimecodeSeparateChanged();
     void photoModeEnabledChanged();
     void photoLongExposureEnabledChanged();
     void photoBracketingEnabledChanged();
@@ -428,6 +459,7 @@ private:
                         QString *errorMessage) const;
     void reloadPresetNames();
     void reloadValueSteps();
+    void reloadDualSensorSettings();
     void setPresetStatus(const QString &text, bool error);
     void pollExternalSettings();
     void updateSettingsFileState();
@@ -476,14 +508,22 @@ private:
     QString m_cameraControlsMode = "Light";
     bool m_externalMonitorEnabled = false;
     QString m_externalMonitorMode = "Clean Feed";
+    QString m_previewSource = QStringLiteral("Both");
+    QString m_cam1Settings = QStringLiteral("unison");
+    QString m_recordCamerasSetting = QStringLiteral("Both");
+    int m_previewWipe = 0;
+    bool m_previewWipeVertical = false;
+    bool m_previewStack = false;
+    int m_previewOpacity = 50;
     QString m_externalMonitorInfoOverlay = "On";
     QString m_externalMonitorOrientation = "Landscape";
     bool m_dateTimeOverlayEnabled = false;
     bool m_recordingFrameEnabled = false;
     bool m_frameBufferBarEnabled = false;
     bool m_recordingRedTimecodeEnabled = true;
-    bool m_audioRecordedOutlineEnabled = true;
+    bool m_audioRecordedOutlineEnabled = false;
     QString m_timecodeMode = "Free Run";
+    bool m_fileTimecodeSeparate = false;
     bool m_photoModeEnabled = false;
     bool m_photoLongExposureEnabled = false;
     bool m_photoBracketingEnabled = false;
