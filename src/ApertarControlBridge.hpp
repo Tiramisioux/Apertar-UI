@@ -290,6 +290,7 @@ signals:
     void cam1Changed();
     void cam1SettingsChanged();
     void recordCamerasChanged();
+    void cameraRatesChanged(bool cam0InTake, bool cam1InTake, double cam1SizeScale, double cam1Fps);
     void cdngCompressionChanged();
     void recordingCapabilitiesChanged();
     void tuningFileChanged();
@@ -358,6 +359,7 @@ private:
     void applyCoreState(const QJsonObject &state);
     void applyCam1State(const QJsonObject &state);
     void clearCam1State();
+    void updateCameraRates();
     void applyClipNameState(const QJsonObject &state);
     void ensureEventSocketConnected();
     void processEventSocketMessages();

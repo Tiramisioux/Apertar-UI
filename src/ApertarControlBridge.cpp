@@ -1467,6 +1467,7 @@ void ApertarControlBridge::applyCam1State(const QJsonObject &state)
         if (recordCameras != m_recordCameras) {
             m_recordCameras = recordCameras;
             emit recordCamerasChanged();
+            updateCameraRates();
         }
     }
 
@@ -1536,6 +1537,7 @@ void ApertarControlBridge::applyCam1State(const QJsonObject &state)
     }
     if (fieldsChanged)
         emit cam1Changed();
+    updateCameraRates();
 }
 
 void ApertarControlBridge::clearCam1State()
@@ -1551,14 +1553,52 @@ void ApertarControlBridge::clearCam1State()
     m_cam1Sensor.clear();
     m_cam1SensorMono = false;
     m_cam1Resolution.clear();
+    const bool hadRecordCameras = !m_recordCameras.isEmpty();
+    m_recordCameras.clear();
     const bool hadSettings = !m_cam1Settings.isEmpty();
     m_cam1Settings.clear();
     qInfo() << "cam1: gone from state";
     emit cam1PresentChanged();
     emit cam1Changed();
+    if (hadRecordCameras)
+        emit recordCamerasChanged();
     if (hadSettings)
         emit cam1SettingsChanged();
+    updateCameraRates();
     updateRefreshTimer();
+}
+
+// REMAINING counts the cameras in the take. cam1's frame is cam0's scaled by pixels and bit depth.
+void ApertarControlBridge::updateCameraRates()
+{
+    const bool cam1InTake = m_cam1Present
+        && (m_recordCameras == QLatin1String("cam1") || m_recordCameras == QLatin1String("both"));
+    const bool cam0InTake = m_recordCameras != QLatin1String("cam1") && m_recordCameras != QLatin1String("none");
+    double scale = 1.0;
+    double fps1 = 0.0;
+    if (cam1InTake) {
+        double w1 = m_cam1Settings.value(QStringLiteral("width")).toDouble();
+        double h1 = m_cam1Settings.value(QStringLiteral("height")).toDouble();
+        if (!(w1 > 0.0 && h1 > 0.0)) {
+            const QStringList parts = m_cam1Settings.value(QStringLiteral("resolution")).toString().split(QLatin1Char('x'));
+            if (parts.size() == 2) {
+                w1 = parts.at(0).toDouble();
+                h1 = parts.at(1).toDouble();
+            }
+        }
+        const QStringList parts0 = m_resolution.split(QLatin1Char('x'));
+        const double w0 = parts0.size() == 2 ? parts0.at(0).toDouble() : 0.0;
+        const double h0 = parts0.size() == 2 ? parts0.at(1).toDouble() : 0.0;
+        const double bits1 = m_cam1Settings.value(QStringLiteral("raw_bit_depth")).toDouble();
+        const double bits0 = m_rawBitDepth.section(QLatin1Char('-'), 0, 0).toDouble();
+        if (w1 > 0.0 && h1 > 0.0 && w0 > 0.0 && h0 > 0.0) {
+            scale = (w1 * h1) / (w0 * h0);
+            if (bits1 > 0.0 && bits0 > 0.0)
+                scale *= bits1 / bits0;
+        }
+        fps1 = m_cam1Settings.value(QStringLiteral("fps")).toDouble();
+    }
+    emit cameraRatesChanged(cam0InTake, cam1InTake, scale, fps1);
 }
 
 void ApertarControlBridge::applyCoreState(const QJsonObject &state)
@@ -2687,6 +2727,7 @@ void ApertarControlBridge::setResolution(const QString &value)
 
     m_resolution = value;
     emit resolutionChanged();
+    updateCameraRates();
 }
 
 void ApertarControlBridge::setRecordingFormatValue(const QString &value)
@@ -2750,6 +2791,7 @@ void ApertarControlBridge::setRawBitDepthValue(const QString &value)
 
     m_rawBitDepth = normalized;
     emit rawBitDepthChanged();
+    updateCameraRates();
 }
 
 void ApertarControlBridge::setH264ResolutionValue(const QString &value)
