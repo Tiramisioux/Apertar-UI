@@ -2718,6 +2718,29 @@ Timer {
                        ? root.controlBridge.clipMergeAllDone / root.controlBridge.clipMergeAllTotal : -1
         }
 
+        // Core's limit_why: what the running mode holds for a 30-minute take and what held a better one back. Amber when
+        // Dynamic resolution is off and the fps is above the limit.
+        Text {
+            z: 20
+            anchors.left: captureStatusChip.left
+            anchors.top: captureStatusChip.bottom
+            anchors.topMargin: 6
+            width: Math.round(parent.width * 0.6)
+            visible: !root.photoModeEnabled && !!root.controlBridge && root.controlBridge.limitWhy !== ""
+            text: root.controlBridge ? root.controlBridge.limitWhy : ""
+            color: !!root.controlBridge && root.controlBridge.dynamicResolution === "Off" && root.controlBridge.limitFps > 0
+                   && root.currentFpsValue() > root.controlBridge.limitFps ? "#ffd54a" : "white"
+            opacity: root.effectiveControlsOpacity
+            font.family: interMedium.font.family
+            font.pixelSize: root.photoStatusChipFontSize
+            wrapMode: Text.WordWrap
+            maximumLineCount: 3
+            elide: Text.ElideRight
+            style: Text.Outline
+            styleColor: "#a0000000"
+            renderType: Text.NativeRendering
+        }
+
         ControlsWarning {
             z: 20
             anchors.left: captureStatusChip.right

@@ -109,6 +109,10 @@ Item {
                                            && apertarControlBridge.clearHdr
     readonly property bool clearHdrAvailable: root.imx585Detected && !root.stillCaptureMode
                                               && (root.recordFormat === "cDNG" || root.recordFormat === "MLV")
+    // Dynamic resolution works on the raw formats; the row stays hidden until Core has sent ladder_enabled.
+    readonly property bool dynamicResolutionAvailable: !root.stillCaptureMode
+                                                        && (root.recordFormat === "cDNG" || root.recordFormat === "MLV")
+                                                        && !!apertarControlBridge && apertarControlBridge.dynamicResolution !== ""
     readonly property bool stillCaptureMode: root.settingsState && root.settingsState.photoModeEnabled
     readonly property bool h264RecordFormat: !root.stillCaptureMode && root.recordFormat === "H.264"
     readonly property bool proresRecordFormat: root.recordFormat.indexOf("ProRes") === 0
@@ -1812,9 +1816,9 @@ Item {
         }
     }
 
-    function executeApplyFramesPerFolder(value) {
+    function executeApplySplitMode(value) {
         mediaSettingErrorOpen = false
-        if (!apertarControlBridge.applyFramesPerFolder(value)) {
+        if (!apertarControlBridge.applySplitMode(value)) {
             mediaSettingErrorText = apertarControlBridge.lastError.length > 0
                                   ? apertarControlBridge.lastError
                                   : "Split Long Takes could not be changed."
@@ -3465,7 +3469,7 @@ Item {
                 InlineDropdownField {
                     width: (parent.width - 12) / 2
                     visible: root.cdngRecordFormat
-                    label: apertarControlBridge && apertarControlBridge.ladderActive ? "Compression (set by Mode Ladder)" : "Compression"
+                    label: "Compression"
                     value: apertarControlBridge ? apertarControlBridge.cdngCompression : "none"
                     displayValue: value === "lossless_jpeg" ? "Lossless JPEG"
                                   : (value === "lossy_3to1" ? "Lossy 3:1"
@@ -3523,6 +3527,33 @@ Item {
                 font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
                 wrapMode: Text.WordWrap
                 renderType: Text.NativeRendering
+            }
+
+            Column {
+                width: parent.width
+                spacing: 8
+                visible: root.dynamicResolutionAvailable
+
+                InlineDropdownField {
+                    width: parent.width
+                    label: "Dynamic Resolution"
+                    value: apertarControlBridge ? apertarControlBridge.dynamicResolution : "Off"
+                    options: ["Off", "On"]
+                    fieldEnabled: apertarControlBridge && !apertarControlBridge.recording
+                    popupParent: dropdownOverlay
+                    dropdownController: sharedDropdownController
+                    onValueSelected: function(v) { apertarControlBridge.applyDynamicResolution(v) }
+                }
+
+                Text {
+                    width: parent.width
+                    text: "Picks the resolution, bit depth, Clear HDR and compression that hold the frame rate for 30-minute takes. Off keeps your mode."
+                    color: "#8cffffff"
+                    font.family: interRegular.font.family
+                    font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                    wrapMode: Text.WordWrap
+                    renderType: Text.NativeRendering
+                }
             }
 
             Column {
@@ -5475,11 +5506,10 @@ Item {
                 onClicked: root.openEjectConfirmation()
             }
 
-            // [storage] frames_per_folder: Off (0, one folder) or N frames per part_NNN folder; a value set in the config file
-            // and not in the list is offered too (the WebUI's Media card has the same choice).
+            // [storage] split: Off (one folder), On (part_NNN folders of frames_per_folder frames) or Automatic (On above 32 fps).
             Rectangle {
                 width: parent.width
-                visible: !!apertarControlBridge && apertarControlBridge.framesPerFolder >= 0
+                visible: !!apertarControlBridge && apertarControlBridge.splitMode !== ""
                 height: root.largeLandscapeLayout ? (splitTakesColumn.implicitHeight + 44) : (root.standardLandscapeLayout ? (splitTakesColumn.implicitHeight + 32) : (splitTakesColumn.implicitHeight + 28))
                 radius: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 20 : 18)
                 color: "#171717"
@@ -5499,32 +5529,26 @@ Item {
                         InlineDropdownField {
                             width: parent.width
                             label: "Split Long Takes"
-                            value: apertarControlBridge ? String(apertarControlBridge.framesPerFolder) : "0"
-                            displayValue: value === "0" ? "Off" : value + " frames per folder"
-                            options: {
-                                var list = [{ value: "0", label: "Off" }]
-                                var presets = [1000, 2000, 5000, 10000]
-                                var current = apertarControlBridge ? apertarControlBridge.framesPerFolder : 0
-                                if (current > 0 && presets.indexOf(current) < 0) {
-                                    presets.push(current)
-                                    presets.sort(function(a, b) { return a - b })
-                                }
-                                for (var i = 0; i < presets.length; ++i)
-                                    list.push({ value: String(presets[i]), label: presets[i] + " frames per folder" })
-                                return list
-                            }
+                            value: apertarControlBridge ? apertarControlBridge.splitMode : "on"
+                            displayValue: value === "off" ? "Off" : (value === "auto" ? "Automatic" : "On")
+                            options: [
+                                { value: "off", label: "Off" },
+                                { value: "on", label: "On" },
+                                { value: "auto", label: "Automatic" }
+                            ]
                             fieldEnabled: !!apertarControlBridge && !apertarControlBridge.recording
                                           && !apertarControlBridge.framesPerFolderEnv
                             popupParent: dropdownOverlay
                             dropdownController: sharedDropdownController
-                            onValueSelected: function(v) { root.executeApplyFramesPerFolder(parseInt(v, 10)) }
+                            onValueSelected: function(v) { root.executeApplySplitMode(v) }
                         }
 
                         Text {
                             width: parent.width
                             text: apertarControlBridge && apertarControlBridge.framesPerFolderEnv
                                   ? "Set by APERTAR_CDNG_FRAMES_PER_FOLDER"
-                                  : "Start a new folder after this many frames"
+                                  : (apertarControlBridge && apertarControlBridge.splitMode === "off" ? "One folder for the whole take"
+                                     : "Start a new folder every " + (apertarControlBridge ? apertarControlBridge.framesPerFolder : 5000) + " frames")
                             color: "#8cffffff"
                             font.family: interRegular.font.family
                             font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
@@ -5534,7 +5558,7 @@ Item {
 
                         Text {
                             width: parent.width
-                            text: "Needed for long cDNG takes: a folder with many files slows file creation. No effect on MLV, ProRes and H.264."
+                            text: "Needed for long cDNG takes: a folder with many files slows file creation. Automatic turns it on above 32 fps. No effect on MLV, ProRes and H.264."
                             color: "#8cffffff"
                             font.family: interRegular.font.family
                             font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)

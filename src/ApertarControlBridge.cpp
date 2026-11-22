@@ -693,20 +693,20 @@ bool ApertarControlBridge::applyBufferMode(const QString &value)
     });
 }
 
-bool ApertarControlBridge::applyFramesPerFolder(int value)
+bool ApertarControlBridge::applySplitMode(const QString &value)
 {
-    // Core takes 0 (one folder) or 100-100000; the tiles send 0 or 5000 (the SSD campaign's value).
-    if (value != 0 && (value < 100 || value > 100000)) {
-        setLastError(QStringLiteral("Frames per folder must be 0 (one folder) or 100 to 100000."));
+    // Core takes off, on or auto and keeps the part size (frames_per_folder); the reply carries both, which applyCoreState applies.
+    if (value != QStringLiteral("off") && value != QStringLiteral("on") && value != QStringLiteral("auto")) {
+        setLastError(QStringLiteral("Split Long Takes must be Off, On or Automatic."));
         return false;
     }
     if (!sendCoreCommand(QStringLiteral("set_frames_per_folder"), {
-            { QStringLiteral("value"), QString::number(value) }
+            { QStringLiteral("mode"), value }
         })) {
         return false;
     }
-    if (m_framesPerFolder != value) {
-        m_framesPerFolder = value;
+    if (m_splitMode != value) {
+        m_splitMode = value;
         emit clipSplitChanged();
     }
     return true;
@@ -757,6 +757,18 @@ bool ApertarControlBridge::applyCdngLog(const QString &value)
     // Core refuses anything but off or auto; the reply carries cdng_log, which applyCoreState applies.
     return sendCoreCommand(QStringLiteral("set_cdng_log"), {
         { QStringLiteral("value"), value }
+    });
+}
+
+bool ApertarControlBridge::applyDynamicResolution(const QString &displayValue)
+{
+    // Core takes enabled=true or false; the reply carries ladder_enabled, which applyCoreState applies.
+    if (displayValue != QStringLiteral("On") && displayValue != QStringLiteral("Off")) {
+        setLastError(QStringLiteral("Dynamic Resolution must be On or Off."));
+        return false;
+    }
+    return sendCoreCommand(QStringLiteral("set_mode_ladder"), {
+        { QStringLiteral("enabled"), displayValue == QStringLiteral("On") ? QStringLiteral("true") : QStringLiteral("false") }
     });
 }
 
@@ -1780,8 +1792,17 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
     const int previousIsoMax = m_isoMax;
     const double previousFpsMax = m_fpsMax;
     const bool previousLadderActive = m_ladderActive;
+    const QString previousDynamicResolution = m_dynamicResolution;
+    const double previousLimitFps = m_limitFps;
+    const QString previousLimitWhy = m_limitWhy;
     if (state.contains(QStringLiteral("ladder_active")))
         m_ladderActive = state.value(QStringLiteral("ladder_active")).toBool(m_ladderActive);
+    if (state.contains(QStringLiteral("ladder_enabled")))
+        m_dynamicResolution = state.value(QStringLiteral("ladder_enabled")).toBool(false) ? QStringLiteral("On") : QStringLiteral("Off");
+    if (state.contains(QStringLiteral("limit_fps")))
+        m_limitFps = state.value(QStringLiteral("limit_fps")).toDouble(m_limitFps);
+    if (state.contains(QStringLiteral("limit_why")))
+        m_limitWhy = state.value(QStringLiteral("limit_why")).toString();
     if (state.contains(QStringLiteral("iso_max")))
         m_isoMax = state.value(QStringLiteral("iso_max")).toInt(m_isoMax);
     if (state.contains(QStringLiteral("fps_max")))
@@ -1820,7 +1841,8 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         const bool shutterSet = m_recording && m_fpsSpeedRamp && m_fpsSpeedRampKeepExposure;
         if (isoInUse != m_isoInUse || whiteBalanceInUse != m_whiteBalanceInUse || isoSet != m_isoSetByCamera ||
             whiteBalanceSet != m_whiteBalanceSetByCamera || shutterSet != m_shutterSetByCamera ||
-            m_isoMax != previousIsoMax || m_fpsMax != previousFpsMax || m_ladderActive != previousLadderActive) {
+            m_isoMax != previousIsoMax || m_fpsMax != previousFpsMax || m_ladderActive != previousLadderActive ||
+            m_dynamicResolution != previousDynamicResolution || m_limitFps != previousLimitFps || m_limitWhy != previousLimitWhy) {
             m_isoInUse = isoInUse;
             m_whiteBalanceInUse = whiteBalanceInUse;
             m_isoSetByCamera = isoSet;
@@ -3003,6 +3025,15 @@ void ApertarControlBridge::applyBufferState(const QJsonObject &state)
         return raw.isString() ? (text == QStringLiteral("true") || text == QStringLiteral("1")) : raw.toBool(false);
     };
     bool splitChanged = false;
+    if (state.contains(QStringLiteral("split_mode"))) {
+        const QString mode = state.value(QStringLiteral("split_mode")).toString();
+        const QString normalized = (mode == QStringLiteral("off") || mode == QStringLiteral("on") || mode == QStringLiteral("auto"))
+            ? mode : QString();
+        if (m_splitMode != normalized) {
+            m_splitMode = normalized;
+            splitChanged = true;
+        }
+    }
     if (state.contains(QStringLiteral("frames_per_folder"))) {
         const QJsonValue raw = state.value(QStringLiteral("frames_per_folder"));
         const int perFolder = qMax(0, raw.isString() ? raw.toString().trimmed().toInt() : raw.toInt(0));

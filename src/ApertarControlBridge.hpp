@@ -19,7 +19,10 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(int isoMax READ isoMax NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(double fpsMax READ fpsMax NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(QString fileTimecodeMode READ fileTimecodeMode NOTIFY fileTimecodeModeChanged)   // Core's timecode for the clips and the audio ("Free Run" / "Rec Run")
-    Q_PROPERTY(bool ladderActive READ ladderActive NOTIFY cameraSetValuesChanged)   // the mode ladder picks the mode and the compression
+    Q_PROPERTY(bool ladderActive READ ladderActive NOTIFY cameraSetValuesChanged)   // Dynamic resolution picks the mode and the compression
+    Q_PROPERTY(QString dynamicResolution READ dynamicResolution NOTIFY cameraSetValuesChanged)   // Core's ladder_enabled as "On" or "Off"; empty = unknown (row hidden)
+    Q_PROPERTY(double limitFps READ limitFps NOTIFY cameraSetValuesChanged)   // what the running mode holds for a 30-minute take; 0 = unknown
+    Q_PROPERTY(QString limitWhy READ limitWhy NOTIFY cameraSetValuesChanged)   // one sentence on the limit, for the line under the FPS picker
     Q_PROPERTY(QString isoInUse READ isoInUse NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(QString whiteBalanceInUse READ whiteBalanceInUse NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(bool isoSetByCamera READ isoSetByCamera NOTIFY cameraSetValuesChanged)
@@ -83,6 +86,7 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(int bufferStopPercent READ bufferStopPercent NOTIFY bufferStopPercentChanged)
     Q_PROPERTY(QString bufferSetting READ bufferSetting NOTIFY bufferSettingChanged)
     Q_PROPERTY(int framesPerFolder READ framesPerFolder NOTIFY clipSplitChanged)
+    Q_PROPERTY(QString splitMode READ splitMode NOTIFY clipSplitChanged)
     Q_PROPERTY(bool framesPerFolderEnv READ framesPerFolderEnv NOTIFY clipSplitChanged)
     Q_PROPERTY(bool clipMergeKnown READ clipMergeKnown NOTIFY clipSplitChanged)
     Q_PROPERTY(bool clipMergeEnabled READ clipMergeEnabled NOTIFY clipSplitChanged)
@@ -131,6 +135,9 @@ public:
     int isoMax() const { return m_isoMax; }
     double fpsMax() const { return m_fpsMax; }
     bool ladderActive() const { return m_ladderActive; }
+    QString dynamicResolution() const { return m_dynamicResolution; }
+    double limitFps() const { return m_limitFps; }
+    QString limitWhy() const { return m_limitWhy; }
     QString fileTimecodeMode() const { return m_fileTimecodeMode; }
     QString isoInUse() const { return m_isoInUse; }
     QString whiteBalanceInUse() const { return m_whiteBalanceInUse; }
@@ -189,6 +196,7 @@ public:
     int bufferStopPercent() const { return m_bufferStopPercent; }
     QString bufferSetting() const { return m_bufferSetting; }
     int framesPerFolder() const { return m_framesPerFolder; }
+    QString splitMode() const { return m_splitMode; }
     bool framesPerFolderEnv() const { return m_framesPerFolderEnv; }
     bool clipMergeKnown() const { return m_clipMergeKnown; }
     bool clipMergeEnabled() const { return m_clipMergeEnabled; }
@@ -244,7 +252,7 @@ public:
     Q_INVOKABLE bool applyTuningFile(const QString &path);
     Q_INVOKABLE bool applyRawBitDepth(const QString &displayValue);
     Q_INVOKABLE bool applyBufferMode(const QString &value);
-    Q_INVOKABLE bool applyFramesPerFolder(int value);
+    Q_INVOKABLE bool applySplitMode(const QString &value);
     Q_INVOKABLE bool applyClipMerge(bool enabled);
     Q_INVOKABLE bool applyStoragePreroll();
     Q_INVOKABLE bool applyStoragePrerollAuto(bool on);
@@ -253,6 +261,7 @@ public:
     Q_INVOKABLE bool applyClearHdr(bool enabled);
     Q_INVOKABLE bool applyStopOnDroppedFrame(bool enabled);
     Q_INVOKABLE bool applyCdngLog(const QString &value);
+    Q_INVOKABLE bool applyDynamicResolution(const QString &displayValue);
     Q_INVOKABLE bool applyH264Resolution(const QString &displayValue);
     Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue);
     Q_INVOKABLE bool applyFileTimecodeMode(const QString &displayValue);
@@ -499,8 +508,10 @@ private:
     bool m_bufferSafetyStop = false; // Core ended the take because the write buffer filled; true until drained
     int m_bufferStopPercent = 0;     // Core's buffer stop threshold in percent, 0 = off
     QString m_bufferSetting; // requested mode from Core's buffer_setting; empty = unknown (control hidden)
-    // Core's [storage] frames_per_folder (0 = one folder; -1 = unknown, row hidden) and clip_merge; *Env = set by the
-    // environment (APERTAR_CDNG_FRAMES_PER_FOLDER / APERTAR_CLIP_MERGE=0), so the tiles are locked.
+    // Core's [storage] split (off, on or auto; empty = unknown, row hidden), the part size frames_per_folder (0 while the
+    // split is off) and clip_merge; *Env = set by the environment (APERTAR_CDNG_FRAMES_PER_FOLDER / APERTAR_CLIP_MERGE=0),
+    // so the tiles are locked.
+    QString m_splitMode;
     int m_framesPerFolder = -1;
     bool m_framesPerFolderEnv = false;
     bool m_clipMergeKnown = false;
@@ -545,6 +556,9 @@ private:
     int m_isoMax = 0;
     double m_fpsMax = 0.0;
     bool m_ladderActive = false;
+    QString m_dynamicResolution;
+    double m_limitFps = 0.0;
+    QString m_limitWhy;
     QString m_fileTimecodeMode = QStringLiteral("Free Run");
     QString m_isoInUse;
     QString m_whiteBalanceInUse;
