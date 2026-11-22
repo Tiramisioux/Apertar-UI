@@ -109,6 +109,10 @@ Item {
                                            && apertarControlBridge.clearHdr
     readonly property bool clearHdrAvailable: root.imx585Detected && !root.stillCaptureMode
                                               && (root.recordFormat === "cDNG" || root.recordFormat === "MLV")
+    // Dynamic resolution works on the raw formats; the row stays hidden until Core has sent ladder_enabled.
+    readonly property bool dynamicResolutionAvailable: !root.stillCaptureMode
+                                                        && (root.recordFormat === "cDNG" || root.recordFormat === "MLV")
+                                                        && !!apertarControlBridge && apertarControlBridge.dynamicResolution !== ""
     readonly property bool stillCaptureMode: root.settingsState && root.settingsState.photoModeEnabled
     readonly property bool h264RecordFormat: !root.stillCaptureMode && root.recordFormat === "H.264"
     readonly property bool proresRecordFormat: root.recordFormat.indexOf("ProRes") === 0
@@ -736,6 +740,8 @@ Item {
     property string timeApplyErrorText: ""
     property bool thermalApplySuccessOpen: false
     property bool thermalApplyErrorOpen: false
+    property bool mediaSettingErrorOpen: false
+    property string mediaSettingErrorText: ""
     property string thermalApplyErrorText: ""
     property string wifiSelectedSsid: ""
     property string wifiSelectedSecurity: ""
@@ -1810,6 +1816,36 @@ Item {
         }
     }
 
+    function executeApplySplitMode(value) {
+        mediaSettingErrorOpen = false
+        if (!apertarControlBridge.applySplitMode(value)) {
+            mediaSettingErrorText = apertarControlBridge.lastError.length > 0
+                                  ? apertarControlBridge.lastError
+                                  : "Split Long Takes could not be changed."
+            mediaSettingErrorOpen = true
+        }
+    }
+
+    function executeApplyClipMerge(enabled) {
+        mediaSettingErrorOpen = false
+        if (!apertarControlBridge.applyClipMerge(enabled)) {
+            mediaSettingErrorText = apertarControlBridge.lastError.length > 0
+                                  ? apertarControlBridge.lastError
+                                  : "Merge Split Clips could not be changed."
+            mediaSettingErrorOpen = true
+        }
+    }
+
+    function executeApplyStopOnDroppedFrame(enabled) {
+        mediaSettingErrorOpen = false
+        if (!apertarControlBridge.applyStopOnDroppedFrame(enabled)) {
+            mediaSettingErrorText = apertarControlBridge.lastError.length > 0
+                                  ? apertarControlBridge.lastError
+                                  : "Stop on Dropped Frame could not be changed."
+            mediaSettingErrorOpen = true
+        }
+    }
+
     function wifiRequiresPassword(security) {
         var normalized = security ? String(security).trim() : ""
         if (normalized.length === 0)
@@ -2722,35 +2758,50 @@ Item {
     Component {
         id: monitoringFocusPeakingComponent
 
-        MonitoringRow {
-            property string reorderSectionName: "Monitoring"
-            popupParent: dropdownOverlay
-            dropdownController: sharedDropdownController
-            title: "Focus Peaking"
-            titleIconSource: "qrc:/qml/icons/focuspeaking.png"
-            description: "Highlight in-focus edges"
-            enabled: root.settingsState ? root.settingsState.focusPeakingEnabled : false
-            favoriteEnabled: root.favoriteControlsEnabled
-            favorited: root.itemIsFavorited("focusPeaking")
-            choice1Label: "Threshold"
-            choice1Value: root.valueToFocusThreshold(root.settingsState ? root.settingsState.focusPeakingThreshold : 0.04)
-            choice1Options: ["Low", "Medium", "High"]
-            choice2Label: "Color"
-            choice2Value: root.settingsState ? root.settingsState.focusPeakingColor : "Red"
-            choice2Options: ["Red", "Green", "Blue", "Yellow", "Pink"]
-            onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
-            onFavoriteToggleRequested: root.toggleFavoriteItem("focusPeaking")
-            onToggleRequested: {
-                if (root.settingsState)
-                    root.settingsState.focusPeakingEnabled = !root.settingsState.focusPeakingEnabled
+        Column {
+            width: parent.width
+            spacing: 6
+
+            MonitoringRow {
+                property string reorderSectionName: "Monitoring"
+                popupParent: dropdownOverlay
+                dropdownController: sharedDropdownController
+                title: "Focus Peaking"
+                titleIconSource: "qrc:/qml/icons/focuspeaking.png"
+                description: "Highlight in-focus edges"
+                enabled: root.settingsState ? root.settingsState.focusPeakingEnabled : false
+                favoriteEnabled: root.favoriteControlsEnabled
+                favorited: root.itemIsFavorited("focusPeaking")
+                choice1Label: "Threshold"
+                choice1Value: root.valueToFocusThreshold(root.settingsState ? root.settingsState.focusPeakingThreshold : 0.04)
+                choice1Options: ["Low", "Medium", "High"]
+                choice2Label: "Color"
+                choice2Value: root.settingsState ? root.settingsState.focusPeakingColor : "Red"
+                choice2Options: ["Red", "Green", "Blue", "Yellow", "Pink"]
+                onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
+                onFavoriteToggleRequested: root.toggleFavoriteItem("focusPeaking")
+                onToggleRequested: {
+                    if (root.settingsState)
+                        root.settingsState.focusPeakingEnabled = !root.settingsState.focusPeakingEnabled
+                }
+                onChoice1Selected: function(v) {
+                    if (root.settingsState)
+                        root.settingsState.focusPeakingThreshold = root.focusThresholdToValue(v)
+                }
+                onChoice2Selected: function(v) {
+                    if (root.settingsState)
+                        root.settingsState.focusPeakingColor = v
+                }
             }
-            onChoice1Selected: function(v) {
-                if (root.settingsState)
-                    root.settingsState.focusPeakingThreshold = root.focusThresholdToValue(v)
-            }
-            onChoice2Selected: function(v) {
-                if (root.settingsState)
-                    root.settingsState.focusPeakingColor = v
+
+            Text {
+                width: parent.width
+                text: "No measured cost. At the limit of 4K Clear HDR the camera lost fewer frames with them on. Leave them on."
+                color: "#8cffffff"
+                font.family: interRegular.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                wrapMode: Text.WordWrap
+                renderType: Text.NativeRendering
             }
         }
     }
@@ -2758,28 +2809,43 @@ Item {
     Component {
         id: monitoringZebraComponent
 
-        MonitoringRow {
-            property string reorderSectionName: "Monitoring"
-            popupParent: dropdownOverlay
-            dropdownController: sharedDropdownController
-            title: "Zebra"
-            titleIconSource: "qrc:/qml/icons/zebra.png"
-            description: "Exposure clipping warning"
-            enabled: root.settingsState ? root.settingsState.zebraEnabled : false
-            favoriteEnabled: root.favoriteControlsEnabled
-            favorited: root.itemIsFavorited("zebra")
-            choice1Label: "Level"
-            choice1Value: root.thresholdToZebraLevel(root.settingsState ? root.settingsState.zebraThreshold : 0.70)
-            choice1Options: ["70%", "75%", "80%", "85%", "90%", "95%", "100%"]
-            onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
-            onFavoriteToggleRequested: root.toggleFavoriteItem("zebra")
-            onToggleRequested: {
-                if (root.settingsState)
-                    root.settingsState.zebraEnabled = !root.settingsState.zebraEnabled
+        Column {
+            width: parent.width
+            spacing: 6
+
+            MonitoringRow {
+                property string reorderSectionName: "Monitoring"
+                popupParent: dropdownOverlay
+                dropdownController: sharedDropdownController
+                title: "Zebra"
+                titleIconSource: "qrc:/qml/icons/zebra.png"
+                description: "Exposure clipping warning"
+                enabled: root.settingsState ? root.settingsState.zebraEnabled : false
+                favoriteEnabled: root.favoriteControlsEnabled
+                favorited: root.itemIsFavorited("zebra")
+                choice1Label: "Level"
+                choice1Value: root.thresholdToZebraLevel(root.settingsState ? root.settingsState.zebraThreshold : 0.70)
+                choice1Options: ["70%", "75%", "80%", "85%", "90%", "95%", "100%"]
+                onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
+                onFavoriteToggleRequested: root.toggleFavoriteItem("zebra")
+                onToggleRequested: {
+                    if (root.settingsState)
+                        root.settingsState.zebraEnabled = !root.settingsState.zebraEnabled
+                }
+                onChoice1Selected: function(v) {
+                    if (root.settingsState)
+                        root.settingsState.zebraThreshold = root.zebraLevelToThreshold(v)
+                }
             }
-            onChoice1Selected: function(v) {
-                if (root.settingsState)
-                    root.settingsState.zebraThreshold = root.zebraLevelToThreshold(v)
+
+            Text {
+                width: parent.width
+                text: "No measured cost. At the limit of 4K Clear HDR the camera lost fewer frames with them on. Leave them on."
+                color: "#8cffffff"
+                font.family: interRegular.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                wrapMode: Text.WordWrap
+                renderType: Text.NativeRendering
             }
         }
     }
@@ -2997,7 +3063,7 @@ Item {
             dropdownController: sharedDropdownController
             title: "Audio Recording Outline"
             description: "A faint red outline on the audio meter when sound is recorded with the clips."
-            enabled: root.settingsState ? root.settingsState.audioRecordedOutlineEnabled : true
+            enabled: root.settingsState ? root.settingsState.audioRecordedOutlineEnabled : false
             onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
             onToggleRequested: {
                 if (root.settingsState)
@@ -3284,6 +3350,7 @@ Item {
                 readonly property int activeFieldCount: 3
                                                         + ((root.processedVideoRecordFormat || root.sensorCropControlsAvailable) ? 1 : 0)
                                                         + (root.cdngRecordFormat ? 1 : 0)
+                                                        + (root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable ? 1 : 0)
                 readonly property int activeRowCount: Math.ceil(activeFieldCount / columns)
 
                 width: parent.width
@@ -3402,7 +3469,7 @@ Item {
                 InlineDropdownField {
                     width: (parent.width - 12) / 2
                     visible: root.cdngRecordFormat
-                    label: apertarControlBridge && apertarControlBridge.ladderActive ? "Compression (set by Mode Ladder)" : "Compression"
+                    label: "Compression"
                     value: apertarControlBridge ? apertarControlBridge.cdngCompression : "none"
                     displayValue: value === "lossless_jpeg" ? "Lossless JPEG"
                                   : (value === "lossy_3to1" ? "Lossy 3:1"
@@ -3419,6 +3486,74 @@ Item {
                     onValueSelected: function(v) { apertarControlBridge.applyCdngCompression(v) }
                 }
 
+                InlineDropdownField {
+                    width: (parent.width - 12) / 2
+                    visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
+                    label: "Log"
+                    value: apertarControlBridge && apertarControlBridge.cdngLogOn ? "auto" : "off"
+                    displayValue: value === "auto" ? "On" : "Off"
+                    options: [
+                        { value: "off", label: "Off" },
+                        { value: "auto", label: "On" }
+                    ]
+                    fieldEnabled: apertarControlBridge && !apertarControlBridge.recording
+                    popupParent: dropdownOverlay
+                    dropdownController: sharedDropdownController
+                    onValueSelected: function(v) { apertarControlBridge.applyCdngLog(v) }
+                }
+
+            }
+
+            Text {
+                width: parent.width
+                visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
+                text: !apertarControlBridge.cdngLogOn ? "Linear storage"
+                      : (apertarControlBridge.cdngLogApplied
+                         ? (apertarControlBridge.cdngLogBits > 0
+                            ? "Stores one step down (" + apertarControlBridge.cdngLogBits + "-bit)"
+                            : "One step down")
+                         : "Not applied: outside Clear HDR the sensor chip already compresses the raw stream; Log works in Clear HDR. Files stay linear.")
+                color: "#9aa5b1"
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                width: parent.width
+                visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
+                text: "Makes Clear HDR 16-bit files a quarter smaller but costs 2 to 3 fps in 4K. No effect in SDR, no cost at 2K."
+                color: "#8cffffff"
+                font.family: interRegular.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                wrapMode: Text.WordWrap
+                renderType: Text.NativeRendering
+            }
+
+            Column {
+                width: parent.width
+                spacing: 8
+                visible: root.dynamicResolutionAvailable
+
+                InlineDropdownField {
+                    width: parent.width
+                    label: "Dynamic Resolution"
+                    value: apertarControlBridge ? apertarControlBridge.dynamicResolution : "Off"
+                    options: ["Off", "On"]
+                    fieldEnabled: apertarControlBridge && !apertarControlBridge.recording
+                    popupParent: dropdownOverlay
+                    dropdownController: sharedDropdownController
+                    onValueSelected: function(v) { apertarControlBridge.applyDynamicResolution(v) }
+                }
+
+                Text {
+                    width: parent.width
+                    text: "Picks the resolution, bit depth, Clear HDR and compression that hold the frame rate for 30-minute takes. Off keeps your mode."
+                    color: "#8cffffff"
+                    font.family: interRegular.font.family
+                    font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                    wrapMode: Text.WordWrap
+                    renderType: Text.NativeRendering
+                }
             }
 
             Column {
@@ -3427,32 +3562,19 @@ Item {
                 visible: (root.cdngRecordFormat || root.recordFormat === "MLV")
                          && !!apertarControlBridge && apertarControlBridge.bufferSetting !== ""
 
-                Text {
+                InlineDropdownField {
                     width: parent.width
-                    text: "Write Buffer"
-                    color: "white"
-                    font.pixelSize: 14
-                }
-
-                Row {
-                    width: parent.width
-                    spacing: 12
-
-                    ActionTile {
-                        width: (parent.width - 12) / 2
-                        label: "Frames"
-                        tone: apertarControlBridge.bufferSetting === "frames" ? "accent" : "default"
-                        actionEnabled: !apertarControlBridge.recording
-                        onClicked: apertarControlBridge.applyBufferMode("frames")
-                    }
-
-                    ActionTile {
-                        width: (parent.width - 12) / 2
-                        label: "RAM"
-                        tone: apertarControlBridge.bufferSetting === "ram" ? "accent" : "default"
-                        actionEnabled: !apertarControlBridge.recording
-                        onClicked: apertarControlBridge.applyBufferMode("ram")
-                    }
+                    label: "Write Buffer"
+                    value: apertarControlBridge ? apertarControlBridge.bufferSetting : "frames"
+                    displayValue: value === "ram" ? "RAM" : "Frames"
+                    options: [
+                        { value: "frames", label: "Frames" },
+                        { value: "ram", label: "RAM" }
+                    ]
+                    fieldEnabled: apertarControlBridge && !apertarControlBridge.recording
+                    popupParent: dropdownOverlay
+                    dropdownController: sharedDropdownController
+                    onValueSelected: function(v) { apertarControlBridge.applyBufferMode(v) }
                 }
 
                 Text {
@@ -3461,40 +3583,6 @@ Item {
                           : (apertarControlBridge.bufferMode === "ram" ? "Large RAM buffer in use"
                              : "Takes effect at the next take"
                                + (apertarControlBridge.bufferNote !== "" ? " \u00b7 " + apertarControlBridge.bufferNote : ""))
-                    color: "#9aa5b1"
-                    font.pixelSize: 12
-                    wrapMode: Text.WordWrap
-                }
-            }
-
-            Column {
-                width: parent.width
-                spacing: 8
-                visible: root.cdngRecordFormat && !!apertarControlBridge && apertarControlBridge.cdngLogAvailable
-
-                Text {
-                    width: parent.width
-                    text: "Log"
-                    color: "white"
-                    font.pixelSize: 14
-                }
-
-                ActionTile {
-                    width: (parent.width - 12) / 2
-                    label: apertarControlBridge.cdngLogOn ? "On" : "Off"
-                    tone: apertarControlBridge.cdngLogOn ? "accent" : "default"
-                    actionEnabled: !apertarControlBridge.recording
-                    onClicked: apertarControlBridge.applyCdngLog(!apertarControlBridge.cdngLogOn)
-                }
-
-                Text {
-                    width: parent.width
-                    text: !apertarControlBridge.cdngLogOn ? "Linear storage"
-                          : (apertarControlBridge.cdngLogApplied
-                             ? (apertarControlBridge.cdngLogBits > 0
-                                ? "Stores one step down (" + apertarControlBridge.cdngLogBits + "-bit)"
-                                : "One step down")
-                             : "Not applied: in SDR the sensor chip already compresses the raw stream; Log works in Clear HDR. Files stay linear.")
                     color: "#9aa5b1"
                     font.pixelSize: 12
                     wrapMode: Text.WordWrap
@@ -4004,7 +4092,7 @@ Item {
 
             InlineDropdownField {
                 width: parent.width
-                label: "UI timecode"
+                label: "Mode"
                 value: root.settingsState ? root.settingsState.timecodeMode : "Free Run"
                 displayValue: root.timecodeDisplayName(value)
                 options: root.timecodeChoices
@@ -4014,23 +4102,32 @@ Item {
                 onValueSelected: function(v) {
                     if (root.settingsState)
                         root.settingsState.timecodeMode = v
+                    if (root.settingsState && root.settingsState.fileTimecodeSeparate)
+                        return
                     if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
-                        apertarControlBridge.applyTimecodeMode(v, "ui")
+                        apertarControlBridge.applyTimecodeMode(v)
                 }
             }
 
             InlineDropdownField {
                 width: parent.width
-                label: "File timecode"
-                value: (typeof apertarControlBridge !== "undefined" && apertarControlBridge) ? apertarControlBridge.fileTimecodeMode : "Free Run"
-                displayValue: root.timecodeDisplayName(value)
-                options: root.timecodeChoices
+                label: "Files"
+                value: root.settingsState && root.settingsState.fileTimecodeSeparate
+                       && typeof apertarControlBridge !== "undefined" && apertarControlBridge
+                       ? apertarControlBridge.fileTimecodeMode : "Same as Mode"
+                displayValue: value === "Same as Mode" ? value : root.timecodeDisplayName(value)
+                options: ["Same as Mode"].concat(root.timecodeChoices)
                 openUpwards: true
                 popupParent: dropdownOverlay
                 dropdownController: sharedDropdownController
                 onValueSelected: function(v) {
-                    if (typeof apertarControlBridge !== "undefined" && apertarControlBridge)
-                        apertarControlBridge.applyTimecodeMode(v, "files")
+                    if (typeof apertarControlBridge === "undefined" || !apertarControlBridge)
+                        return
+                    // A fixed value sets the files apart; Same as Mode sends no target, so Core sets both again.
+                    if (v === "Same as Mode")
+                        apertarControlBridge.applyTimecodeMode(root.settingsState ? root.settingsState.timecodeMode : "Free Run")
+                    else
+                        apertarControlBridge.applyFileTimecodeMode(v)
                 }
             }
         }
@@ -4151,23 +4248,38 @@ Item {
             onPressAndHoldRequested: root.openReorderPopup(reorderSectionName)
             onFavoriteToggleRequested: root.toggleFavoriteItem("audioOptions")
 
-            MonitoringRow {
+            Column {
                 width: parent.width
-                title: "Record Audio"
-                description: (typeof audioDeviceBridge !== "undefined" && audioDeviceBridge && !audioDeviceBridge.hasInputDevices)
-                             ? "No audio input device detected"
-                             : "Capture audio alongside recorded clips"
-                enabled: root.settingsState
-                         ? ((typeof audioDeviceBridge !== "undefined" && audioDeviceBridge && audioDeviceBridge.hasInputDevices)
-                            ? root.settingsState.recordAudioEnabled
-                            : false)
-                         : false
-                available: typeof audioDeviceBridge !== "undefined"
-                           ? audioDeviceBridge.hasInputDevices
-                           : false
-                onToggleRequested: {
-                    if (root.settingsState)
-                        root.settingsState.recordAudioEnabled = !root.settingsState.recordAudioEnabled
+                spacing: 6
+
+                MonitoringRow {
+                    width: parent.width
+                    title: "Record Audio"
+                    description: (typeof audioDeviceBridge !== "undefined" && audioDeviceBridge && !audioDeviceBridge.hasInputDevices)
+                                 ? "No audio input device detected"
+                                 : "Capture audio alongside recorded clips"
+                    enabled: root.settingsState
+                             ? ((typeof audioDeviceBridge !== "undefined" && audioDeviceBridge && audioDeviceBridge.hasInputDevices)
+                                ? root.settingsState.recordAudioEnabled
+                                : false)
+                             : false
+                    available: typeof audioDeviceBridge !== "undefined"
+                               ? audioDeviceBridge.hasInputDevices
+                               : false
+                    onToggleRequested: {
+                        if (root.settingsState)
+                            root.settingsState.recordAudioEnabled = !root.settingsState.recordAudioEnabled
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    text: "Costs under 1 fps, only at the limit of 4K Clear HDR. Record sound as you like; at the limit, turning it off gains about 1 fps."
+                    color: "#8cffffff"
+                    font.family: interRegular.font.family
+                    font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                    wrapMode: Text.WordWrap
+                    renderType: Text.NativeRendering
                 }
             }
 
@@ -5394,132 +5506,275 @@ Item {
                 onClicked: root.openEjectConfirmation()
             }
 
-            // [storage] frames_per_folder: Off (0, one folder) or N frames per part_NNN folder; a value set in the config file
-            // and not in the list is offered too (the WebUI's Media card has the same choice).
-            InlineDropdownField {
+            // [storage] split: Off (one folder), On (part_NNN folders of frames_per_folder frames) or Automatic (On above 32 fps).
+            Rectangle {
                 width: parent.width
-                visible: !!apertarControlBridge && apertarControlBridge.framesPerFolder >= 0
-                label: apertarControlBridge && apertarControlBridge.framesPerFolderEnv
-                       ? "Split Long Takes (set by APERTAR_CDNG_FRAMES_PER_FOLDER)" : "Split Long Takes"
-                value: apertarControlBridge ? String(apertarControlBridge.framesPerFolder) : "0"
-                displayValue: value === "0" ? "Off" : value + " frames per folder"
-                options: {
-                    var list = [{ value: "0", label: "Off" }]
-                    var presets = [1000, 2000, 5000, 10000]
-                    var current = apertarControlBridge ? apertarControlBridge.framesPerFolder : 0
-                    if (current > 0 && presets.indexOf(current) < 0) {
-                        presets.push(current)
-                        presets.sort(function(a, b) { return a - b })
-                    }
-                    for (var i = 0; i < presets.length; ++i)
-                        list.push({ value: String(presets[i]), label: presets[i] + " frames per folder" })
-                    return list
-                }
-                fieldEnabled: !!apertarControlBridge && !apertarControlBridge.framesPerFolderEnv
-                popupParent: dropdownOverlay
-                dropdownController: sharedDropdownController
-                onValueSelected: function(v) { apertarControlBridge.applyFramesPerFolder(parseInt(v, 10)) }
-            }
+                visible: !!apertarControlBridge && apertarControlBridge.splitMode !== ""
+                height: root.largeLandscapeLayout ? (splitTakesColumn.implicitHeight + 44) : (root.standardLandscapeLayout ? (splitTakesColumn.implicitHeight + 32) : (splitTakesColumn.implicitHeight + 28))
+                radius: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 20 : 18)
+                color: "#171717"
+                border.width: 1
+                border.color: "#1affffff"
+                opacity: apertarControlBridge && !apertarControlBridge.recording ? 1.0 : 0.48
 
-            // [storage] clip_merge: joins the part folders of split clips when the camera is idle.
-            Column {
-                width: parent.width
-                spacing: 8
-                visible: !!apertarControlBridge && apertarControlBridge.clipMergeKnown
-
-                Text {
-                    width: parent.width
-                    text: "Merge Split Clips"
-                    color: "white"
-                    font.pixelSize: 14
-                }
-
-                Row {
-                    width: parent.width
-                    spacing: 12
-
-                    ActionTile {
-                        width: (parent.width - 12) / 2
-                        label: "On"
-                        tone: apertarControlBridge.clipMergeEnabled ? "accent" : "default"
-                        actionEnabled: !apertarControlBridge.clipMergeEnvOff && !apertarControlBridge.clipMergeEnabled
-                        onClicked: apertarControlBridge.applyClipMerge(true)
-                    }
-
-                    ActionTile {
-                        width: (parent.width - 12) / 2
-                        label: "Off"
-                        tone: !apertarControlBridge.clipMergeEnabled ? "accent" : "default"
-                        actionEnabled: !apertarControlBridge.clipMergeEnvOff && apertarControlBridge.clipMergeEnabled
-                        onClicked: apertarControlBridge.applyClipMerge(false)
-                    }
-                }
-
-                Text {
-                    width: parent.width
-                    text: (apertarControlBridge.clipMergeEnvOff ? "Turned off by APERTAR_CLIP_MERGE \u00b7 " : "")
-                          + (apertarControlBridge.clipMergeEnabled
-                             ? "Joins the parts into one folder when the camera is idle; pauses when a take starts"
-                             : "Split clips stay in their part folders")
-                    color: "#9aa5b1"
-                    font.pixelSize: 12
-                    wrapMode: Text.WordWrap
-                }
-
-                Repeater {
-                    // Current clip, then all clips (KB clip-merge-progress-plan.md), in the merge grey.
-                    model: apertarControlBridge && apertarControlBridge.clipMergeEnabled && apertarControlBridge.clipMergeAllClips > 0
-                           && apertarControlBridge.clipMergeAllTotal > 0 ? 2 : 0
+                Item {
+                    anchors.fill: parent
+                    anchors.margins: root.largeLandscapeLayout ? 22 : (root.standardLandscapeLayout ? 16 : 14)
 
                     Column {
-                        readonly property bool clipRow: index === 0
-                        readonly property int done: clipRow ? apertarControlBridge.clipMergeClipDone : apertarControlBridge.clipMergeAllDone
-                        readonly property int total: clipRow ? apertarControlBridge.clipMergeClipTotal : apertarControlBridge.clipMergeAllTotal
-                        readonly property int percent: total > 0 ? Math.min(100, Math.floor(100 * done / total)) : 0
+                        id: splitTakesColumn
                         width: parent.width
-                        spacing: 4
+                        spacing: root.largeLandscapeLayout ? 18 : (root.standardLandscapeLayout ? 12 : 10)
+
+                        InlineDropdownField {
+                            width: parent.width
+                            label: "Split Long Takes"
+                            value: apertarControlBridge ? apertarControlBridge.splitMode : "on"
+                            displayValue: value === "off" ? "Off" : (value === "auto" ? "Automatic" : "On")
+                            options: [
+                                { value: "off", label: "Off" },
+                                { value: "on", label: "On" },
+                                { value: "auto", label: "Automatic" }
+                            ]
+                            fieldEnabled: !!apertarControlBridge && !apertarControlBridge.recording
+                                          && !apertarControlBridge.framesPerFolderEnv
+                            popupParent: dropdownOverlay
+                            dropdownController: sharedDropdownController
+                            onValueSelected: function(v) { root.executeApplySplitMode(v) }
+                        }
 
                         Text {
                             width: parent.width
-                            text: clipRow
-                                  ? (apertarControlBridge.clipMergeActiveClip !== ""
-                                     ? apertarControlBridge.clipMergeActiveClip + " \u00b7 " + percent + " % (" + done + " / " + total + ")"
-                                     : "Waiting")
-                                  : (apertarControlBridge.clipMergeAllClips + (apertarControlBridge.clipMergeAllClips === 1 ? " clip" : " clips")
-                                     + " \u00b7 " + percent + " %"
-                                     + (apertarControlBridge.clipMergePaused !== ""
-                                        ? " \u00b7 paused (" + apertarControlBridge.clipMergePaused + ")"
-                                        : " \u00b7 " + root.clipMergeEtaText(apertarControlBridge.clipMergeEtaS) + " left"))
-                            color: "#d7d9de"
-                            font.pixelSize: 12
+                            text: apertarControlBridge && apertarControlBridge.framesPerFolderEnv
+                                  ? "Set by APERTAR_CDNG_FRAMES_PER_FOLDER"
+                                  : (apertarControlBridge && apertarControlBridge.splitMode === "off" ? "One folder for the whole take"
+                                     : "Start a new folder every " + (apertarControlBridge ? apertarControlBridge.framesPerFolder : 5000) + " frames")
+                            color: "#8cffffff"
+                            font.family: interRegular.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                            wrapMode: Text.WordWrap
+                            renderType: Text.NativeRendering
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: "Needed for long cDNG takes: a folder with many files slows file creation. Automatic turns it on above 32 fps. No effect on MLV, ProRes and H.264."
+                            color: "#8cffffff"
+                            font.family: interRegular.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                            wrapMode: Text.WordWrap
+                            renderType: Text.NativeRendering
+                        }
+                    }
+                }
+            }
+
+            // [storage] clip_merge: joins the part folders of split clips when the camera is idle.
+            Rectangle {
+                width: parent.width
+                visible: !!apertarControlBridge && apertarControlBridge.clipMergeKnown
+                height: root.largeLandscapeLayout ? 118 : (root.standardLandscapeLayout ? 88 : 76)
+                radius: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 20 : 18)
+                color: "#14ffffff"
+                border.width: 1
+                border.color: "#1affffff"
+                opacity: apertarControlBridge && !apertarControlBridge.recording && !apertarControlBridge.clipMergeEnvOff ? 1.0 : 0.48
+
+                Item {
+                    anchors.fill: parent
+                    anchors.leftMargin: root.largeLandscapeLayout ? 30 : (root.standardLandscapeLayout ? 22 : 18)
+                    anchors.rightMargin: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 18 : 16)
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: clipMergeToggle.left
+                        anchors.rightMargin: root.largeLandscapeLayout ? 26 : 18
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: root.largeLandscapeLayout ? 8 : (root.standardLandscapeLayout ? 6 : 5)
+
+                        Text {
+                            width: parent.width
+                            text: "Merge Split Clips"
+                            color: "white"
+                            font.family: interBold.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 27 : (root.standardLandscapeLayout ? 20 : 16)
+                            renderType: Text.NativeRendering
                             elide: Text.ElideRight
                         }
 
-                        Rectangle {
+                        Text {
                             width: parent.width
-                            height: 8
-                            radius: height / 2
-                            color: "#1a1a1a"
-                            border.width: 1
-                            border.color: "#1affffff"
+                            text: apertarControlBridge && apertarControlBridge.clipMergeEnvOff
+                                  ? "Turned off by APERTAR_CLIP_MERGE"
+                                  : "Join the part folders when the camera is idle"
+                            color: "#8cffffff"
+                            font.family: interRegular.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 12)
+                            renderType: Text.NativeRendering
+                            elide: Text.ElideRight
+                        }
+                    }
 
-                            Rectangle {
-                                width: parent.width * (parent.parent.total > 0 ? Math.min(1, parent.parent.done / parent.parent.total) : 0)
-                                height: parent.height
-                                radius: parent.radius
-                                color: "#73ffffff"   // the READY pill's merge grey, a little stronger on the dark track
-                            }
+                    TogglePill {
+                        id: clipMergeToggle
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: apertarControlBridge ? apertarControlBridge.clipMergeEnabled : false
+                        enabled: !!apertarControlBridge && !apertarControlBridge.recording
+                                 && !apertarControlBridge.clipMergeEnvOff
+                        onToggled: function(value) { root.executeApplyClipMerge(value) }
+                    }
+                }
+            }
+
+            // Progress of the merge worker: the current clip, then all clips, in the READY pill's merge grey.
+            Column {
+                width: parent.width
+                spacing: root.largeLandscapeLayout ? 12 : (root.standardLandscapeLayout ? 8 : 6)
+                visible: !!apertarControlBridge && apertarControlBridge.clipMergeKnown && apertarControlBridge.clipMergeEnabled
+
+                Text {
+                    width: parent.width
+                    visible: apertarControlBridge.clipMergePending === 0 && apertarControlBridge.clipMergeAllClips === 0
+                    text: "Nothing to merge"
+                    color: "#8cffffff"
+                    font.family: interRegular.font.family
+                    font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 13)
+                    renderType: Text.NativeRendering
+                }
+
+                Column {
+                    id: mergeClipProgress
+                    readonly property int percent: apertarControlBridge.clipMergeClipTotal > 0
+                        ? Math.min(100, Math.floor(100 * apertarControlBridge.clipMergeClipDone / apertarControlBridge.clipMergeClipTotal)) : 0
+                    width: parent.width
+                    spacing: root.largeLandscapeLayout ? 6 : 4
+                    visible: apertarControlBridge.clipMergeAllClips > 0 && apertarControlBridge.clipMergeAllTotal > 0
+
+                    Text {
+                        width: parent.width
+                        text: apertarControlBridge.clipMergeActiveClip !== ""
+                              ? apertarControlBridge.clipMergeActiveClip + " \u00b7 " + mergeClipProgress.percent + " % ("
+                                + apertarControlBridge.clipMergeClipDone + " / " + apertarControlBridge.clipMergeClipTotal + ")"
+                              : "Waiting"
+                        color: "white"
+                        font.family: interMedium.font.family
+                        font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 12)
+                        renderType: Text.NativeRendering
+                        elide: Text.ElideRight
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: root.largeLandscapeLayout ? 12 : (root.standardLandscapeLayout ? 9 : 8)
+                        radius: height / 2
+                        color: "#1a1a1a"
+                        border.width: 1
+                        border.color: "#1affffff"
+
+                        Rectangle {
+                            width: parent.width * (apertarControlBridge.clipMergeClipTotal > 0
+                                                   ? Math.min(1, apertarControlBridge.clipMergeClipDone / apertarControlBridge.clipMergeClipTotal) : 0)
+                            height: parent.height
+                            radius: parent.radius
+                            color: "#73ffffff"
                         }
                     }
                 }
 
-                Text {
+                Column {
+                    id: mergeAllProgress
+                    readonly property int percent: apertarControlBridge.clipMergeAllTotal > 0
+                        ? Math.min(100, Math.floor(100 * apertarControlBridge.clipMergeAllDone / apertarControlBridge.clipMergeAllTotal)) : 0
                     width: parent.width
-                    visible: !!apertarControlBridge && apertarControlBridge.clipMergeEnabled && apertarControlBridge.clipMergePending === 0
-                             && apertarControlBridge.clipMergeAllClips === 0
-                    text: "Nothing to merge"
-                    color: "#9aa5b1"
-                    font.pixelSize: 12
+                    spacing: root.largeLandscapeLayout ? 6 : 4
+                    visible: apertarControlBridge.clipMergeAllClips > 0 && apertarControlBridge.clipMergeAllTotal > 0
+
+                    Text {
+                        width: parent.width
+                        text: apertarControlBridge.clipMergeAllClips + (apertarControlBridge.clipMergeAllClips === 1 ? " clip" : " clips")
+                              + " \u00b7 " + mergeAllProgress.percent + " %"
+                              + (apertarControlBridge.clipMergePaused !== ""
+                                 ? " \u00b7 paused (" + apertarControlBridge.clipMergePaused + ")"
+                                 : " \u00b7 " + root.clipMergeEtaText(apertarControlBridge.clipMergeEtaS) + " left")
+                        color: "white"
+                        font.family: interMedium.font.family
+                        font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 12)
+                        renderType: Text.NativeRendering
+                        elide: Text.ElideRight
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: root.largeLandscapeLayout ? 12 : (root.standardLandscapeLayout ? 9 : 8)
+                        radius: height / 2
+                        color: "#1a1a1a"
+                        border.width: 1
+                        border.color: "#1affffff"
+
+                        Rectangle {
+                            width: parent.width * (apertarControlBridge.clipMergeAllTotal > 0
+                                                   ? Math.min(1, apertarControlBridge.clipMergeAllDone / apertarControlBridge.clipMergeAllTotal) : 0)
+                            height: parent.height
+                            radius: parent.radius
+                            color: "#73ffffff"
+                        }
+                    }
+                }
+            }
+
+            // Core's stop_on_dropped_frame: the take ends at its first dropped frame.
+            Rectangle {
+                width: parent.width
+                visible: !!apertarControlBridge
+                height: root.largeLandscapeLayout ? 118 : (root.standardLandscapeLayout ? 88 : 76)
+                radius: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 20 : 18)
+                color: "#14ffffff"
+                border.width: 1
+                border.color: "#1affffff"
+                opacity: apertarControlBridge && !apertarControlBridge.recording ? 1.0 : 0.48
+
+                Item {
+                    anchors.fill: parent
+                    anchors.leftMargin: root.largeLandscapeLayout ? 30 : (root.standardLandscapeLayout ? 22 : 18)
+                    anchors.rightMargin: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 18 : 16)
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: stopOnDroppedFrameToggle.left
+                        anchors.rightMargin: root.largeLandscapeLayout ? 26 : 18
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: root.largeLandscapeLayout ? 8 : (root.standardLandscapeLayout ? 6 : 5)
+
+                        Text {
+                            width: parent.width
+                            text: "Stop on Dropped Frame"
+                            color: "white"
+                            font.family: interBold.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 27 : (root.standardLandscapeLayout ? 20 : 16)
+                            renderType: Text.NativeRendering
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: "Ends the take at the first dropped frame"
+                            color: "#8cffffff"
+                            font.family: interRegular.font.family
+                            font.pixelSize: root.largeLandscapeLayout ? 19 : (root.standardLandscapeLayout ? 14 : 12)
+                            renderType: Text.NativeRendering
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    TogglePill {
+                        id: stopOnDroppedFrameToggle
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: apertarControlBridge ? apertarControlBridge.stopOnDroppedFrame : false
+                        enabled: !!apertarControlBridge && !apertarControlBridge.recording
+                        onToggled: function(value) { root.executeApplyStopOnDroppedFrame(value) }
+                    }
                 }
             }
         }
@@ -8210,6 +8465,7 @@ Item {
                  || root.timeApplyErrorOpen
                  || root.thermalApplySuccessOpen
                  || root.thermalApplyErrorOpen
+                 || root.mediaSettingErrorOpen
         opacity: root.powerConfirmOpen
                  || root.powerErrorOpen
                  || root.ejectConfirmOpen
@@ -8224,7 +8480,8 @@ Item {
                  || root.timeApplySuccessOpen
                  || root.timeApplyErrorOpen
                  || root.thermalApplySuccessOpen
-                 || root.thermalApplyErrorOpen ? 1.0 : 0.0
+                 || root.thermalApplyErrorOpen
+                 || root.mediaSettingErrorOpen ? 1.0 : 0.0
         z: 20000
 
         Behavior on opacity {
@@ -8248,6 +8505,7 @@ Item {
                 root.timeApplyErrorOpen = false
                 root.thermalApplySuccessOpen = false
                 root.thermalApplyErrorOpen = false
+                root.mediaSettingErrorOpen = false
             }
         }
     }
@@ -10046,6 +10304,83 @@ Item {
                     id: thermalApplyErrorCloseArea
                     anchors.fill: parent
                     onClicked: root.thermalApplyErrorOpen = false
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        width: root.largeLandscapeLayout ? 620 : (root.standardLandscapeLayout ? 470 : (root.compactLandscapeLayout ? 340 : 408))
+        height: root.largeLandscapeLayout ? (mediaSettingErrorColumn.implicitHeight + 74) : (root.standardLandscapeLayout ? (mediaSettingErrorColumn.implicitHeight + 60) : (root.compactLandscapeLayout ? (mediaSettingErrorColumn.implicitHeight + 30) : 246))
+        anchors.centerIn: parent
+        anchors.verticalCenterOffset: -10
+        radius: root.largeLandscapeLayout ? 38 : (root.standardLandscapeLayout ? 30 : (root.compactLandscapeLayout ? 20 : 26))
+        color: "#151515"
+        border.width: 1
+        border.color: "#1affffff"
+        visible: root.mediaSettingErrorOpen
+        opacity: root.mediaSettingErrorOpen ? 1.0 : 0.0
+        scale: root.mediaSettingErrorOpen ? 1.0 : 0.96
+        z: 20002
+
+        Behavior on opacity {
+            NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+        }
+
+        Behavior on scale {
+            NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
+        }
+
+        Column {
+            id: mediaSettingErrorColumn
+            anchors.fill: parent
+            anchors.margins: root.largeLandscapeLayout ? 38 : (root.standardLandscapeLayout ? 30 : (root.compactLandscapeLayout ? 15 : 24))
+            spacing: root.largeLandscapeLayout ? 26 : (root.standardLandscapeLayout ? 20 : (root.compactLandscapeLayout ? 8 : 16))
+
+            Text {
+                text: "Media Setting Failed"
+                color: "white"
+                font.family: interBold.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 40 : (root.standardLandscapeLayout ? 30 : (root.compactLandscapeLayout ? 20 : 24))
+                renderType: Text.NativeRendering
+            }
+
+            Text {
+                text: root.mediaSettingErrorText
+                color: "#8f9096"
+                font.family: interRegular.font.family
+                font.pixelSize: root.largeLandscapeLayout ? 23 : (root.standardLandscapeLayout ? 17 : (root.compactLandscapeLayout ? 12 : 14))
+                wrapMode: Text.WordWrap
+                width: parent.width
+                renderType: Text.NativeRendering
+            }
+
+            Rectangle {
+                width: parent.width
+                height: root.largeLandscapeLayout ? 84 : (root.standardLandscapeLayout ? 64 : (root.compactLandscapeLayout ? 44 : 54))
+                radius: root.largeLandscapeLayout ? 28 : (root.standardLandscapeLayout ? 21 : (root.compactLandscapeLayout ? 14 : 18))
+                color: mediaSettingErrorCloseArea.containsPress ? "#20ffffff" : "#14ffffff"
+                border.width: 1
+                border.color: "#1affffff"
+                scale: mediaSettingErrorCloseArea.containsPress ? 0.985 : 1.0
+
+                Behavior on scale {
+                    NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "OK"
+                    color: "white"
+                    font.family: interMedium.font.family
+                    font.pixelSize: root.largeLandscapeLayout ? 25 : (root.standardLandscapeLayout ? 19 : (root.compactLandscapeLayout ? 13 : 16))
+                    renderType: Text.NativeRendering
+                }
+
+                MouseArea {
+                    id: mediaSettingErrorCloseArea
+                    anchors.fill: parent
+                    onClicked: root.mediaSettingErrorOpen = false
                 }
             }
         }

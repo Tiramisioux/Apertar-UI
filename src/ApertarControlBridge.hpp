@@ -19,7 +19,10 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(int isoMax READ isoMax NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(double fpsMax READ fpsMax NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(QString fileTimecodeMode READ fileTimecodeMode NOTIFY fileTimecodeModeChanged)   // Core's timecode for the clips and the audio ("Free Run" / "Rec Run")
-    Q_PROPERTY(bool ladderActive READ ladderActive NOTIFY cameraSetValuesChanged)   // the mode ladder picks the mode and the compression
+    Q_PROPERTY(bool ladderActive READ ladderActive NOTIFY cameraSetValuesChanged)   // Dynamic resolution picks the mode and the compression
+    Q_PROPERTY(QString dynamicResolution READ dynamicResolution NOTIFY cameraSetValuesChanged)   // Core's ladder_enabled as "On" or "Off"; empty = unknown (row hidden)
+    Q_PROPERTY(double limitFps READ limitFps NOTIFY cameraSetValuesChanged)   // what the running mode holds for a 30-minute take; 0 = unknown
+    Q_PROPERTY(QString limitWhy READ limitWhy NOTIFY cameraSetValuesChanged)   // one sentence on the limit, for the line under the FPS picker
     Q_PROPERTY(QString isoInUse READ isoInUse NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(QString whiteBalanceInUse READ whiteBalanceInUse NOTIFY cameraSetValuesChanged)
     Q_PROPERTY(bool isoSetByCamera READ isoSetByCamera NOTIFY cameraSetValuesChanged)
@@ -50,6 +53,7 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(QString tuningFile READ tuningFile NOTIFY tuningFileChanged)
     Q_PROPERTY(QString rawBitDepth READ rawBitDepth NOTIFY rawBitDepthChanged)
     Q_PROPERTY(bool clearHdr READ clearHdr NOTIFY clearHdrChanged)
+    Q_PROPERTY(bool stopOnDroppedFrame READ stopOnDroppedFrame NOTIFY stopOnDroppedFrameChanged)
     Q_PROPERTY(QString h264Resolution READ h264Resolution NOTIFY h264ResolutionChanged)
     Q_PROPERTY(QString sensorName READ sensorName NOTIFY sensorNameChanged)
     Q_PROPERTY(QString autofocusMode READ autofocusMode NOTIFY autofocusModeChanged)
@@ -82,6 +86,7 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(int bufferStopPercent READ bufferStopPercent NOTIFY bufferStopPercentChanged)
     Q_PROPERTY(QString bufferSetting READ bufferSetting NOTIFY bufferSettingChanged)
     Q_PROPERTY(int framesPerFolder READ framesPerFolder NOTIFY clipSplitChanged)
+    Q_PROPERTY(QString splitMode READ splitMode NOTIFY clipSplitChanged)
     Q_PROPERTY(bool framesPerFolderEnv READ framesPerFolderEnv NOTIFY clipSplitChanged)
     Q_PROPERTY(bool clipMergeKnown READ clipMergeKnown NOTIFY clipSplitChanged)
     Q_PROPERTY(bool clipMergeEnabled READ clipMergeEnabled NOTIFY clipSplitChanged)
@@ -130,6 +135,9 @@ public:
     int isoMax() const { return m_isoMax; }
     double fpsMax() const { return m_fpsMax; }
     bool ladderActive() const { return m_ladderActive; }
+    QString dynamicResolution() const { return m_dynamicResolution; }
+    double limitFps() const { return m_limitFps; }
+    QString limitWhy() const { return m_limitWhy; }
     QString fileTimecodeMode() const { return m_fileTimecodeMode; }
     QString isoInUse() const { return m_isoInUse; }
     QString whiteBalanceInUse() const { return m_whiteBalanceInUse; }
@@ -167,6 +175,7 @@ public:
     QString tuningFile() const { return m_tuningFile; }
     QString rawBitDepth() const;
     bool clearHdr() const { return m_clearHdr; }
+    bool stopOnDroppedFrame() const { return m_stopOnDroppedFrame; }
     QString h264Resolution() const;
     QString sensorName() const;
     QString autofocusMode() const;
@@ -187,6 +196,7 @@ public:
     int bufferStopPercent() const { return m_bufferStopPercent; }
     QString bufferSetting() const { return m_bufferSetting; }
     int framesPerFolder() const { return m_framesPerFolder; }
+    QString splitMode() const { return m_splitMode; }
     bool framesPerFolderEnv() const { return m_framesPerFolderEnv; }
     bool clipMergeKnown() const { return m_clipMergeKnown; }
     bool clipMergeEnabled() const { return m_clipMergeEnabled; }
@@ -241,18 +251,20 @@ public:
     Q_INVOKABLE bool applyCdngCompression(const QString &value);
     Q_INVOKABLE bool applyTuningFile(const QString &path);
     Q_INVOKABLE bool applyRawBitDepth(const QString &displayValue);
-    Q_INVOKABLE void applyBufferMode(const QString &value);
-    Q_INVOKABLE void applyFramesPerFolder(int value);
-    Q_INVOKABLE void applyClipMerge(bool enabled);
-    Q_INVOKABLE void applyStoragePreroll();
-    Q_INVOKABLE void applyStoragePrerollAuto(bool on);
-    Q_INVOKABLE void applyClipNameTemplate(const QString &value);
+    Q_INVOKABLE bool applyBufferMode(const QString &value);
+    Q_INVOKABLE bool applySplitMode(const QString &value);
+    Q_INVOKABLE bool applyClipMerge(bool enabled);
+    Q_INVOKABLE bool applyStoragePreroll();
+    Q_INVOKABLE bool applyStoragePrerollAuto(bool on);
+    Q_INVOKABLE bool applyClipNameTemplate(const QString &value);
     Q_INVOKABLE void requestClipNamePreview(const QString &value);
     Q_INVOKABLE bool applyClearHdr(bool enabled);
-    Q_INVOKABLE void applyCdngLog(bool on);
+    Q_INVOKABLE bool applyStopOnDroppedFrame(bool enabled);
+    Q_INVOKABLE bool applyCdngLog(const QString &value);
+    Q_INVOKABLE bool applyDynamicResolution(const QString &displayValue);
     Q_INVOKABLE bool applyH264Resolution(const QString &displayValue);
-    // target: "ui" (what the screens show), "files" (the clips and the audio) or "both"
-    Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue, const QString &target);
+    Q_INVOKABLE bool applyTimecodeMode(const QString &displayValue);
+    Q_INVOKABLE bool applyFileTimecodeMode(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusMode(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusRange(const QString &displayValue);
     Q_INVOKABLE bool applyAutofocusSpeed(const QString &displayValue);
@@ -290,11 +302,13 @@ signals:
     void cam1Changed();
     void cam1SettingsChanged();
     void recordCamerasChanged();
+    void cameraRatesChanged(bool cam0InTake, bool cam1InTake, double cam1SizeScale, double cam1Fps);
     void cdngCompressionChanged();
     void recordingCapabilitiesChanged();
     void tuningFileChanged();
     void rawBitDepthChanged();
     void clearHdrChanged();
+    void stopOnDroppedFrameChanged();
     void h264ResolutionChanged();
     void sensorNameChanged();
     void autofocusModeChanged();
@@ -358,6 +372,7 @@ private:
     void applyCoreState(const QJsonObject &state);
     void applyCam1State(const QJsonObject &state);
     void clearCam1State();
+    void updateCameraRates();
     void applyClipNameState(const QJsonObject &state);
     void ensureEventSocketConnected();
     void processEventSocketMessages();
@@ -413,6 +428,7 @@ private:
     void setTuningFileValue(const QString &value);
     void setRawBitDepthValue(const QString &value);
     void setClearHdrValue(bool value);
+    void setStopOnDroppedFrameValue(bool value);
     void setH264ResolutionValue(const QString &value);
     void setSensorNameValue(const QString &value);
     void setAutofocusModeValue(const QString &value);
@@ -465,6 +481,7 @@ private:
     QString m_tuningFile;
     QString m_rawBitDepth = QStringLiteral("12-bit");
     bool m_clearHdr = false;
+    bool m_stopOnDroppedFrame = false;
     QString m_h264Resolution = QStringLiteral("Match Capture");
     QString m_sensorName = QStringLiteral("Unknown");
     QString m_autofocusMode = QStringLiteral("Continuous");
@@ -491,8 +508,10 @@ private:
     bool m_bufferSafetyStop = false; // Core ended the take because the write buffer filled; true until drained
     int m_bufferStopPercent = 0;     // Core's buffer stop threshold in percent, 0 = off
     QString m_bufferSetting; // requested mode from Core's buffer_setting; empty = unknown (control hidden)
-    // Core's [storage] frames_per_folder (0 = one folder; -1 = unknown, row hidden) and clip_merge; *Env = set by the
-    // environment (APERTAR_CDNG_FRAMES_PER_FOLDER / APERTAR_CLIP_MERGE=0), so the tiles are locked.
+    // Core's [storage] split (off, on or auto; empty = unknown, row hidden), the part size frames_per_folder (0 while the
+    // split is off) and clip_merge; *Env = set by the environment (APERTAR_CDNG_FRAMES_PER_FOLDER / APERTAR_CLIP_MERGE=0),
+    // so the tiles are locked.
+    QString m_splitMode;
     int m_framesPerFolder = -1;
     bool m_framesPerFolderEnv = false;
     bool m_clipMergeKnown = false;
@@ -523,11 +542,23 @@ private:
     bool m_fpsSpeedRamp = false; // Core's fps_speed_ramp (T31): FPS may change during a raw take
     bool m_soundRecording = false; // a sound-only take: recording, but not the camera
     bool m_fpsSpeedRampKeepExposure = false;
+    // Kept only for the touch preset (cameraPresetSettings), as m_lossyDngRatio; defaults are Core's.
+    bool m_fpsSpeedRampStretchAudio = true;
+    bool m_fpsSpeedRampReturn = false;
+    bool m_fpsPhaseLock = false;
+    double m_conformFps = 25.0; // the project's timeline rate (Core's conform_fps)
+    int m_hdrThresholdHigh = 4095;
+    int m_hdrThresholdLow = 0;
+    int m_hdrBlend = 5;
+    int m_hdrGainAdder = 1;
     bool m_isoAutoAfterClearHdr = false;
     bool m_whiteBalanceAutoAfterClearHdr = false;
     int m_isoMax = 0;
     double m_fpsMax = 0.0;
     bool m_ladderActive = false;
+    QString m_dynamicResolution;
+    double m_limitFps = 0.0;
+    QString m_limitWhy;
     QString m_fileTimecodeMode = QStringLiteral("Free Run");
     QString m_isoInUse;
     QString m_whiteBalanceInUse;
@@ -538,7 +569,6 @@ private:
     int m_recordingDroppedFrames = 0; // the take's dropped frames, all kinds (Core recording_dropped_frames)
     int m_controlsErrors = 0;
     int m_controlsWarnings = 0;
-    void setControlsStatus(const QJsonObject &object, const QString &errorsKey, const QString &warningsKey);
     bool m_standby = false;
     QString m_coreMediaState;
     bool m_coreMediaAlive = true;

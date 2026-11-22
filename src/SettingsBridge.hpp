@@ -62,8 +62,12 @@ class SettingsBridge : public QObject
     Q_PROPERTY(bool recordingFrameEnabled READ recordingFrameEnabled WRITE setRecordingFrameEnabled NOTIFY recordingFrameEnabledChanged)
     Q_PROPERTY(bool frameBufferBarEnabled READ frameBufferBarEnabled WRITE setFrameBufferBarEnabled NOTIFY frameBufferBarEnabledChanged)
     Q_PROPERTY(bool recordingRedTimecodeEnabled READ recordingRedTimecodeEnabled WRITE setRecordingRedTimecodeEnabled NOTIFY recordingRedTimecodeEnabledChanged)
+    // True once recordingRedTimecodeEnabled is stored in UI.conf; until then HDMI keeps the white timecode of 1.6.0.
+    Q_PROPERTY(bool recordingRedTimecodeSet READ recordingRedTimecodeSet NOTIFY recordingRedTimecodeEnabledChanged)
     Q_PROPERTY(bool audioRecordedOutlineEnabled READ audioRecordedOutlineEnabled WRITE setAudioRecordedOutlineEnabled NOTIFY audioRecordedOutlineEnabledChanged)
     Q_PROPERTY(QString timecodeMode READ timecodeMode WRITE setTimecodeMode NOTIFY timecodeModeChanged)
+    // Written by Core's set_timecode_mode: true once the file timecode is set apart from timecodeMode.
+    Q_PROPERTY(bool fileTimecodeSeparate READ fileTimecodeSeparate WRITE setFileTimecodeSeparate NOTIFY fileTimecodeSeparateChanged)
     Q_PROPERTY(bool photoModeEnabled READ photoModeEnabled WRITE setPhotoModeEnabled NOTIFY photoModeEnabledChanged)
     Q_PROPERTY(bool photoLongExposureEnabled READ photoLongExposureEnabled WRITE setPhotoLongExposureEnabled NOTIFY photoLongExposureEnabledChanged)
     Q_PROPERTY(bool photoBracketingEnabled READ photoBracketingEnabled WRITE setPhotoBracketingEnabled NOTIFY photoBracketingEnabledChanged)
@@ -219,11 +223,14 @@ public:
     void setFrameBufferBarEnabled(bool value);
     bool recordingRedTimecodeEnabled() const;
     void setRecordingRedTimecodeEnabled(bool value);
+    bool recordingRedTimecodeSet() const;
     bool audioRecordedOutlineEnabled() const;
     void setAudioRecordedOutlineEnabled(bool value);
 
     QString timecodeMode() const;
     void setTimecodeMode(const QString &value);
+    bool fileTimecodeSeparate() const;
+    void setFileTimecodeSeparate(bool value);
 
     bool photoModeEnabled() const;
     void setPhotoModeEnabled(bool value);
@@ -394,6 +401,7 @@ signals:
     void recordingRedTimecodeEnabledChanged();
     void audioRecordedOutlineEnabledChanged();
     void timecodeModeChanged();
+    void fileTimecodeSeparateChanged();
     void photoModeEnabledChanged();
     void photoLongExposureEnabledChanged();
     void photoBracketingEnabledChanged();
@@ -513,8 +521,9 @@ private:
     bool m_recordingFrameEnabled = false;
     bool m_frameBufferBarEnabled = false;
     bool m_recordingRedTimecodeEnabled = true;
-    bool m_audioRecordedOutlineEnabled = true;
+    bool m_audioRecordedOutlineEnabled = false;
     QString m_timecodeMode = "Free Run";
+    bool m_fileTimecodeSeparate = false;
     bool m_photoModeEnabled = false;
     bool m_photoLongExposureEnabled = false;
     bool m_photoBracketingEnabled = false;

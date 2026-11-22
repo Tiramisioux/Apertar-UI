@@ -616,30 +616,27 @@ bool ApertarControlBridge::applyRawBitDepth(const QString &displayValue)
     return true;
 }
 
-void ApertarControlBridge::applyStoragePreroll()
+bool ApertarControlBridge::applyStoragePreroll()
 {
     // A refusal (running, recording, ...) comes back from Core as an error and is shown through lastError.
-    sendCoreCommand(QStringLiteral("storage_preroll"), {});
+    return sendCoreCommand(QStringLiteral("storage_preroll"), {});
 }
 
-void ApertarControlBridge::applyStoragePrerollAuto(bool on)
+bool ApertarControlBridge::applyStoragePrerollAuto(bool on)
 {
     // No optimistic update: the buffer event/state from Core brings storage_preroll_auto back.
-    sendCoreCommand(QStringLiteral("set_storage_preroll"), {
+    return sendCoreCommand(QStringLiteral("set_storage_preroll"), {
         { QStringLiteral("value"), on ? QStringLiteral("on") : QStringLiteral("off") }
     });
 }
 
-void ApertarControlBridge::applyClipNameTemplate(const QString &value)
+bool ApertarControlBridge::applyClipNameTemplate(const QString &value)
 {
     // Core corrects the template (appends _{clip} if missing); its reply carries the stored template
-    // and example, applied here. A refusal (recording) comes back as an error through lastError.
-    QJsonObject reply;
-    if (sendCoreCommand(QStringLiteral("set_clip_name_template"), {
-            { QStringLiteral("value"), value }
-        }, &reply)) {
-        applyClipNameState(reply);
-    }
+    // and example, which applyCoreState applies. A refusal (recording) comes back as an error through lastError.
+    return sendCoreCommand(QStringLiteral("set_clip_name_template"), {
+        { QStringLiteral("value"), value }
+    });
 }
 
 void ApertarControlBridge::requestClipNamePreview(const QString &value)
@@ -684,53 +681,50 @@ void ApertarControlBridge::applyClipNameState(const QJsonObject &state)
         emit clipNameChanged();
 }
 
-void ApertarControlBridge::applyBufferMode(const QString &value)
+bool ApertarControlBridge::applyBufferMode(const QString &value)
 {
     if (value != QStringLiteral("frames") && value != QStringLiteral("ram")) {
         setLastError(QStringLiteral("Invalid write buffer mode."));
-        return;
+        return false;
     }
-    if (!sendCoreCommand(QStringLiteral("set_buffer_mode"), {
-            { QStringLiteral("value"), value }
-        })) {
-        return;
-    }
-    if (m_bufferSetting != value) {
-        m_bufferSetting = value;
-        emit bufferSettingChanged();
-    }
+    // The reply carries buffer_setting, which applyCoreState applies.
+    return sendCoreCommand(QStringLiteral("set_buffer_mode"), {
+        { QStringLiteral("value"), value }
+    });
 }
 
-void ApertarControlBridge::applyFramesPerFolder(int value)
+bool ApertarControlBridge::applySplitMode(const QString &value)
 {
-    // Core takes 0 (one folder) or 100-100000; the tiles send 0 or 5000 (the SSD campaign's value).
-    if (value != 0 && (value < 100 || value > 100000)) {
-        setLastError(QStringLiteral("Invalid frames per folder."));
-        return;
+    // Core takes off, on or auto and keeps the part size (frames_per_folder); the reply carries both, which applyCoreState applies.
+    if (value != QStringLiteral("off") && value != QStringLiteral("on") && value != QStringLiteral("auto")) {
+        setLastError(QStringLiteral("Split Long Takes must be Off, On or Automatic."));
+        return false;
     }
     if (!sendCoreCommand(QStringLiteral("set_frames_per_folder"), {
-            { QStringLiteral("value"), QString::number(value) }
+            { QStringLiteral("mode"), value }
         })) {
-        return;
+        return false;
     }
-    if (m_framesPerFolder != value) {
-        m_framesPerFolder = value;
+    if (m_splitMode != value) {
+        m_splitMode = value;
         emit clipSplitChanged();
     }
+    return true;
 }
 
-void ApertarControlBridge::applyClipMerge(bool enabled)
+bool ApertarControlBridge::applyClipMerge(bool enabled)
 {
     if (!sendCoreCommand(QStringLiteral("set_clip_merge"), {
             { QStringLiteral("enabled"), enabled ? QStringLiteral("true") : QStringLiteral("false") }
         })) {
-        return;
+        return false;
     }
     if (!m_clipMergeKnown || m_clipMergeEnabled != enabled) {
         m_clipMergeKnown = true;
         m_clipMergeEnabled = enabled;
         emit clipSplitChanged();
     }
+    return true;
 }
 
 bool ApertarControlBridge::applyClearHdr(bool enabled)
@@ -746,17 +740,36 @@ bool ApertarControlBridge::applyClearHdr(bool enabled)
     return true;
 }
 
-void ApertarControlBridge::applyCdngLog(bool on)
+bool ApertarControlBridge::applyStopOnDroppedFrame(bool enabled)
 {
-    if (!sendCoreCommand(QStringLiteral("set_cdng_log"), {
-            { QStringLiteral("value"), on ? QStringLiteral("auto") : QStringLiteral("off") }
+    if (!sendCoreCommand(QStringLiteral("set_stop_on_dropped_frame"), {
+            { QStringLiteral("enabled"), enabled ? QStringLiteral("true") : QStringLiteral("false") }
         })) {
-        return;
+        return false;
     }
-    if (m_cdngLogOn != on) {
-        m_cdngLogOn = on;
-        emit cdngLogChanged();
+
+    setStopOnDroppedFrameValue(enabled);
+    return true;
+}
+
+bool ApertarControlBridge::applyCdngLog(const QString &value)
+{
+    // Core refuses anything but off or auto; the reply carries cdng_log, which applyCoreState applies.
+    return sendCoreCommand(QStringLiteral("set_cdng_log"), {
+        { QStringLiteral("value"), value }
+    });
+}
+
+bool ApertarControlBridge::applyDynamicResolution(const QString &displayValue)
+{
+    // Core takes enabled=true or false; the reply carries ladder_enabled, which applyCoreState applies.
+    if (displayValue != QStringLiteral("On") && displayValue != QStringLiteral("Off")) {
+        setLastError(QStringLiteral("Dynamic Resolution must be On or Off."));
+        return false;
     }
+    return sendCoreCommand(QStringLiteral("set_mode_ladder"), {
+        { QStringLiteral("enabled"), displayValue == QStringLiteral("On") ? QStringLiteral("true") : QStringLiteral("false") }
+    });
 }
 
 bool ApertarControlBridge::applyH264Resolution(const QString &displayValue)
@@ -780,27 +793,33 @@ bool ApertarControlBridge::applyH264Resolution(const QString &displayValue)
     return true;
 }
 
-bool ApertarControlBridge::applyTimecodeMode(const QString &displayValue, const QString &target)
+bool ApertarControlBridge::applyTimecodeMode(const QString &displayValue)
 {
     const QString normalized = parseTimecodeModeValue(displayValue);
-    if (normalized.isEmpty() || (target != QLatin1String("ui") && target != QLatin1String("files") && target != QLatin1String("both"))) {
+    if (normalized.isEmpty()) {
         setLastError(QStringLiteral("Invalid timecode mode value."));
         return false;
     }
 
-    if (!sendCoreCommand(QStringLiteral("set_timecode_mode"),
-                         { { QStringLiteral("value"), normalized }, { QStringLiteral("target"), target } }))
+    if (!sendCoreCommand(QStringLiteral("set_timecode_mode"), { { QStringLiteral("value"), normalized } }))
         return false;
 
-    if (target != QLatin1String("files")) {
-        m_settings.setValue(QStringLiteral("timecodeMode"), displayValue);
-        m_settings.sync();
-    }
-    if (target != QLatin1String("ui") && m_fileTimecodeMode != displayValue) {
-        m_fileTimecodeMode = displayValue;
-        emit fileTimecodeModeChanged();
-    }
+    m_settings.setValue(QStringLiteral("timecodeMode"), displayValue);
+    m_settings.sync();
     return true;
+}
+
+bool ApertarControlBridge::applyFileTimecodeMode(const QString &displayValue)
+{
+    const QString normalized = parseTimecodeModeValue(displayValue);
+    if (normalized.isEmpty()) {
+        setLastError(QStringLiteral("Invalid timecode mode value."));
+        return false;
+    }
+
+    // Only the clips' timecode; Core records in UI.conf that it is set apart (fileTimecodeSeparate).
+    return sendCoreCommand(QStringLiteral("set_timecode_mode"),
+                           { { QStringLiteral("value"), normalized }, { QStringLiteral("target"), QStringLiteral("files") } });
 }
 
 bool ApertarControlBridge::applyAutofocusMode(const QString &displayValue)
@@ -1289,6 +1308,21 @@ QJsonObject ApertarControlBridge::cameraPresetSettings() const
     QJsonObject result;
     result.insert("cameraFps", m_fps);
     result.insert("cameraIso", m_iso);
+    // Same keys and value words as Core's buildCurrentPresetPayload, so both preset writers carry the same set.
+    result.insert("cameraFpsSpeedRamp", m_fpsSpeedRamp);
+    result.insert("cameraFpsSpeedRampShutter", m_fpsSpeedRampKeepExposure ? QStringLiteral("exposure") : QStringLiteral("angle"));
+    result.insert("cameraFpsSpeedRampAudio", m_fpsSpeedRampStretchAudio ? QStringLiteral("stretch") : QStringLiteral("real"));
+    result.insert("cameraFpsSpeedRampAfter", m_fpsSpeedRampReturn ? QStringLiteral("return") : QStringLiteral("stay"));
+    if (!m_clipNameTemplate.isEmpty())
+        result.insert("cameraClipNameTemplate", m_clipNameTemplate);
+    result.insert("cameraFpsPhaseLock", m_fpsPhaseLock);
+    result.insert("cameraTimecodeMode", parseTimecodeModeValue(m_fileTimecodeMode));
+    result.insert("cameraConformFps", m_conformFps);
+    result.insert("cameraClearHdr", m_clearHdr);
+    result.insert("cameraHdrThresholdHigh", m_hdrThresholdHigh);
+    result.insert("cameraHdrThresholdLow", m_hdrThresholdLow);
+    result.insert("cameraHdrBlend", m_hdrBlend);
+    result.insert("cameraHdrGainAdder", m_hdrGainAdder);
     result.insert("cameraExposureCompensation", m_exposureCompensation);
     result.insert("cameraExposureMetering", m_exposureMetering);
     result.insert("cameraShutterAngle", m_shutterAngle);
@@ -1303,6 +1337,7 @@ QJsonObject ApertarControlBridge::cameraPresetSettings() const
     const bool lossy = isLossyCdngCompressionValue(m_cdngCompression) && m_recordingFormat == "cDNG";
     result.insert("cameraRecordingFormat", lossy ? QStringLiteral("lossydng") : parseRecordingFormatValue(m_recordingFormat));
     result.insert("cameraCdngCompression", lossy ? QStringLiteral("none") : m_cdngCompression);
+    result.insert("cameraCdngLog", m_cdngLogOn ? QStringLiteral("auto") : QStringLiteral("off"));
     result.insert("cameraLossyDngRatio", m_lossyDngRatio);
     result.insert("cameraProresProfile", m_proresProfile);
     result.insert("cameraProresColorProfile", m_proresColorProfile);
@@ -1322,7 +1357,8 @@ bool ApertarControlBridge::applyCameraPreset(const QJsonObject &settings)
 {
     QJsonObject capture;
     for (auto it = settings.begin(); it != settings.end(); ++it)
-        if (it.key().startsWith("camera") || it.key() == "timecodeMode" || it.key() == "photoBracketingEv")
+        if (it.key().startsWith("camera") || it.key() == "timecodeMode" || it.key() == "fileTimecodeSeparate" ||
+            it.key() == "photoBracketingEv")
             capture.insert(it.key(), it.value());
     if (capture.isEmpty()) return true;
     QJsonObject reply;
@@ -1358,17 +1394,9 @@ void ApertarControlBridge::applyCoreMessage(const QJsonObject &message)
         return;
     }
     if (event == QStringLiteral("standby") || event == QStringLiteral("still_exposure") ||
-        event == QStringLiteral("timelapse_progress") || event == QStringLiteral("media_write_state")) {
+        event == QStringLiteral("timelapse_progress") || event == QStringLiteral("media_write_state") ||
+        event == QStringLiteral("controls") || event == QStringLiteral("media")) {
         applyCoreState(message);
-        return;
-    }
-    if (event == QStringLiteral("controls")) {
-        setControlsStatus(message, QStringLiteral("errors"), QStringLiteral("warnings"));
-        return;
-    }
-    if (event == QStringLiteral("media")) {
-        setCoreMediaState(message.value(QStringLiteral("state")).toString(),
-                          message.value(QStringLiteral("mounted")).toBool(true));
         return;
     }
     if (event == QStringLiteral("audio_level")) {
@@ -1458,19 +1486,6 @@ void ApertarControlBridge::setCoreMediaState(const QString &state, bool alive)
     emit coreMediaStateChanged(state, alive);
 }
 
-void ApertarControlBridge::setControlsStatus(const QJsonObject &object, const QString &errorsKey, const QString &warningsKey)
-{
-    if (!object.contains(errorsKey))
-        return;
-    const int errors = object.value(errorsKey).toInt(0);
-    const int warnings = object.value(warningsKey).toInt(0);
-    if (errors == m_controlsErrors && warnings == m_controlsWarnings)
-        return;
-    m_controlsErrors = errors;
-    m_controlsWarnings = warnings;
-    emit controlsStatusChanged();
-}
-
 void ApertarControlBridge::applyCam1State(const QJsonObject &state)
 {
     if (state.contains(QStringLiteral("record_cameras"))) {
@@ -1478,6 +1493,7 @@ void ApertarControlBridge::applyCam1State(const QJsonObject &state)
         if (recordCameras != m_recordCameras) {
             m_recordCameras = recordCameras;
             emit recordCamerasChanged();
+            updateCameraRates();
         }
     }
 
@@ -1547,6 +1563,7 @@ void ApertarControlBridge::applyCam1State(const QJsonObject &state)
     }
     if (fieldsChanged)
         emit cam1Changed();
+    updateCameraRates();
 }
 
 void ApertarControlBridge::clearCam1State()
@@ -1562,19 +1579,65 @@ void ApertarControlBridge::clearCam1State()
     m_cam1Sensor.clear();
     m_cam1SensorMono = false;
     m_cam1Resolution.clear();
+    const bool hadRecordCameras = !m_recordCameras.isEmpty();
+    m_recordCameras.clear();
     const bool hadSettings = !m_cam1Settings.isEmpty();
     m_cam1Settings.clear();
     qInfo() << "cam1: gone from state";
     emit cam1PresentChanged();
     emit cam1Changed();
+    if (hadRecordCameras)
+        emit recordCamerasChanged();
     if (hadSettings)
         emit cam1SettingsChanged();
+    updateCameraRates();
     updateRefreshTimer();
+}
+
+// REMAINING counts the cameras in the take. cam1's frame is cam0's scaled by pixels and bit depth.
+void ApertarControlBridge::updateCameraRates()
+{
+    const bool cam1InTake = m_cam1Present
+        && (m_recordCameras == QLatin1String("cam1") || m_recordCameras == QLatin1String("both"));
+    const bool cam0InTake = m_recordCameras != QLatin1String("cam1") && m_recordCameras != QLatin1String("none");
+    double scale = 1.0;
+    double fps1 = 0.0;
+    if (cam1InTake) {
+        double w1 = m_cam1Settings.value(QStringLiteral("width")).toDouble();
+        double h1 = m_cam1Settings.value(QStringLiteral("height")).toDouble();
+        if (!(w1 > 0.0 && h1 > 0.0)) {
+            const QStringList parts = m_cam1Settings.value(QStringLiteral("resolution")).toString().split(QLatin1Char('x'));
+            if (parts.size() == 2) {
+                w1 = parts.at(0).toDouble();
+                h1 = parts.at(1).toDouble();
+            }
+        }
+        const QStringList parts0 = m_resolution.split(QLatin1Char('x'));
+        const double w0 = parts0.size() == 2 ? parts0.at(0).toDouble() : 0.0;
+        const double h0 = parts0.size() == 2 ? parts0.at(1).toDouble() : 0.0;
+        const double bits1 = m_cam1Settings.value(QStringLiteral("raw_bit_depth")).toDouble();
+        const double bits0 = m_rawBitDepth.section(QLatin1Char('-'), 0, 0).toDouble();
+        if (w1 > 0.0 && h1 > 0.0 && w0 > 0.0 && h0 > 0.0) {
+            scale = (w1 * h1) / (w0 * h0);
+            if (bits1 > 0.0 && bits0 > 0.0)
+                scale *= bits1 / bits0;
+        }
+        fps1 = m_cam1Settings.value(QStringLiteral("fps")).toDouble();
+    }
+    emit cameraRatesChanged(cam0InTake, cam1InTake, scale, fps1);
 }
 
 void ApertarControlBridge::applyCoreState(const QJsonObject &state)
 {
-    setControlsStatus(state, QStringLiteral("controls_errors"), QStringLiteral("controls_warnings"));
+    if (state.contains(QStringLiteral("controls_errors"))) {
+        const int errors = state.value(QStringLiteral("controls_errors")).toInt(0);
+        const int warnings = state.value(QStringLiteral("controls_warnings")).toInt(0);
+        if (m_controlsErrors != errors || m_controlsWarnings != warnings) {
+            m_controlsErrors = errors;
+            m_controlsWarnings = warnings;
+            emit controlsStatusChanged();
+        }
+    }
     if (state.contains(QStringLiteral("media_state")))
         setCoreMediaState(state.value(QStringLiteral("media_state")).toString(),
                           state.value(QStringLiteral("media_alive")).toBool(true));
@@ -1641,8 +1704,10 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
     }
 
     const bool previousAutoExposure = autoExposureEnabled();
-    if (state.contains(QStringLiteral("iso_auto")))
+    if (state.contains(QStringLiteral("iso_auto"))) {
         m_isoAuto = state.value(QStringLiteral("iso_auto")).toBool(m_isoAuto);
+        updateRefreshTimer();
+    }
 
     if (state.contains(QStringLiteral("shutter_auto")))
         m_shutterAuto = state.value(QStringLiteral("shutter_auto")).toBool(m_shutterAuto);
@@ -1680,8 +1745,10 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         emit exposureMeteringChanged();
     }
 
-    if (state.contains(QStringLiteral("wb_auto")))
+    if (state.contains(QStringLiteral("wb_auto"))) {
         m_whiteBalanceAuto = state.value(QStringLiteral("wb_auto")).toBool(m_whiteBalanceAuto);
+        updateRefreshTimer();
+    }
 
     if (state.contains(QStringLiteral("wb_available"))) {
         const bool available = state.value(QStringLiteral("wb_available")).toBool();
@@ -1725,8 +1792,17 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
     const int previousIsoMax = m_isoMax;
     const double previousFpsMax = m_fpsMax;
     const bool previousLadderActive = m_ladderActive;
+    const QString previousDynamicResolution = m_dynamicResolution;
+    const double previousLimitFps = m_limitFps;
+    const QString previousLimitWhy = m_limitWhy;
     if (state.contains(QStringLiteral("ladder_active")))
         m_ladderActive = state.value(QStringLiteral("ladder_active")).toBool(m_ladderActive);
+    if (state.contains(QStringLiteral("ladder_enabled")))
+        m_dynamicResolution = state.value(QStringLiteral("ladder_enabled")).toBool(false) ? QStringLiteral("On") : QStringLiteral("Off");
+    if (state.contains(QStringLiteral("limit_fps")))
+        m_limitFps = state.value(QStringLiteral("limit_fps")).toDouble(m_limitFps);
+    if (state.contains(QStringLiteral("limit_why")))
+        m_limitWhy = state.value(QStringLiteral("limit_why")).toString();
     if (state.contains(QStringLiteral("iso_max")))
         m_isoMax = state.value(QStringLiteral("iso_max")).toInt(m_isoMax);
     if (state.contains(QStringLiteral("fps_max")))
@@ -1737,6 +1813,22 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         m_whiteBalanceAutoAfterClearHdr = state.value(QStringLiteral("wb_auto_after_clear_hdr")).toBool(m_whiteBalanceAutoAfterClearHdr);
     if (state.contains(QStringLiteral("fps_speed_ramp_keep_exposure")))
         m_fpsSpeedRampKeepExposure = state.value(QStringLiteral("fps_speed_ramp_keep_exposure")).toBool(m_fpsSpeedRampKeepExposure);
+    if (state.contains(QStringLiteral("fps_speed_ramp_stretch_audio")))
+        m_fpsSpeedRampStretchAudio = state.value(QStringLiteral("fps_speed_ramp_stretch_audio")).toBool(m_fpsSpeedRampStretchAudio);
+    if (state.contains(QStringLiteral("fps_speed_ramp_after")))
+        m_fpsSpeedRampReturn = state.value(QStringLiteral("fps_speed_ramp_after")).toString() == QStringLiteral("return");
+    if (state.contains(QStringLiteral("fps_phase_lock")))
+        m_fpsPhaseLock = state.value(QStringLiteral("fps_phase_lock")).toBool(m_fpsPhaseLock);
+    if (state.contains(QStringLiteral("conform_fps")))
+        m_conformFps = state.value(QStringLiteral("conform_fps")).toDouble(m_conformFps);
+    if (state.contains(QStringLiteral("hdr_threshold_high")))
+        m_hdrThresholdHigh = state.value(QStringLiteral("hdr_threshold_high")).toInt(m_hdrThresholdHigh);
+    if (state.contains(QStringLiteral("hdr_threshold_low")))
+        m_hdrThresholdLow = state.value(QStringLiteral("hdr_threshold_low")).toInt(m_hdrThresholdLow);
+    if (state.contains(QStringLiteral("hdr_blend")))
+        m_hdrBlend = state.value(QStringLiteral("hdr_blend")).toInt(m_hdrBlend);
+    if (state.contains(QStringLiteral("hdr_gain_adder")))
+        m_hdrGainAdder = state.value(QStringLiteral("hdr_gain_adder")).toInt(m_hdrGainAdder);
     {
         const int isoActual = state.value(QStringLiteral("iso_actual")).toInt(0);
         const QString isoInUse = !m_isoAuto ? QString() : (isoActual > 0 ? QString::number(isoActual) : m_isoInUse);
@@ -1749,7 +1841,8 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         const bool shutterSet = m_recording && m_fpsSpeedRamp && m_fpsSpeedRampKeepExposure;
         if (isoInUse != m_isoInUse || whiteBalanceInUse != m_whiteBalanceInUse || isoSet != m_isoSetByCamera ||
             whiteBalanceSet != m_whiteBalanceSetByCamera || shutterSet != m_shutterSetByCamera ||
-            m_isoMax != previousIsoMax || m_fpsMax != previousFpsMax || m_ladderActive != previousLadderActive) {
+            m_isoMax != previousIsoMax || m_fpsMax != previousFpsMax || m_ladderActive != previousLadderActive ||
+            m_dynamicResolution != previousDynamicResolution || m_limitFps != previousLimitFps || m_limitWhy != previousLimitWhy) {
             m_isoInUse = isoInUse;
             m_whiteBalanceInUse = whiteBalanceInUse;
             m_isoSetByCamera = isoSet;
@@ -1757,7 +1850,6 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
             m_shutterSetByCamera = shutterSet;
             emit cameraSetValuesChanged();
         }
-        updateRefreshTimer();
     }
 
     if (state.contains(QStringLiteral("width")) && state.contains(QStringLiteral("height"))) {
@@ -1819,6 +1911,8 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
 
     if (state.contains(QStringLiteral("clear_hdr")))
         setClearHdrValue(state.value(QStringLiteral("clear_hdr")).toBool(false));
+    if (state.contains(QStringLiteral("stop_on_dropped_frame")))
+        setStopOnDroppedFrameValue(state.value(QStringLiteral("stop_on_dropped_frame")).toBool(false));
 
     if (state.contains(QStringLiteral("h264_width")) && state.contains(QStringLiteral("h264_height"))) {
         setH264ResolutionValue(formatH264ResolutionValue(
@@ -1839,10 +1933,15 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         const QString displayValue = normalized == QStringLiteral("rec_run")
             ? QStringLiteral("Rec Run")
             : QStringLiteral("Free Run");
-        // Core's mode is the files' timecode; the UI's own copy (timecodeMode) is set apart.
         if (m_fileTimecodeMode != displayValue) {
             m_fileTimecodeMode = displayValue;
             emit fileTimecodeModeChanged();
+        }
+        // The screens follow Core's mode unless the file timecode is set apart.
+        m_settings.sync();
+        if (!m_settings.value(QStringLiteral("fileTimecodeSeparate"), false).toBool()) {
+            m_settings.setValue(QStringLiteral("timecodeMode"), displayValue);
+            m_settings.sync();
         }
     }
 
@@ -2666,6 +2765,7 @@ void ApertarControlBridge::setResolution(const QString &value)
 
     m_resolution = value;
     emit resolutionChanged();
+    updateCameraRates();
 }
 
 void ApertarControlBridge::setRecordingFormatValue(const QString &value)
@@ -2721,6 +2821,15 @@ void ApertarControlBridge::setClearHdrValue(bool value)
     emit clearHdrChanged();
 }
 
+void ApertarControlBridge::setStopOnDroppedFrameValue(bool value)
+{
+    if (m_stopOnDroppedFrame == value)
+        return;
+
+    m_stopOnDroppedFrame = value;
+    emit stopOnDroppedFrameChanged();
+}
+
 void ApertarControlBridge::setRawBitDepthValue(const QString &value)
 {
     const QString normalized = formatRawBitDepthValue(parseRawBitDepthValue(value));
@@ -2729,6 +2838,7 @@ void ApertarControlBridge::setRawBitDepthValue(const QString &value)
 
     m_rawBitDepth = normalized;
     emit rawBitDepthChanged();
+    updateCameraRates();
 }
 
 void ApertarControlBridge::setH264ResolutionValue(const QString &value)
@@ -2915,6 +3025,15 @@ void ApertarControlBridge::applyBufferState(const QJsonObject &state)
         return raw.isString() ? (text == QStringLiteral("true") || text == QStringLiteral("1")) : raw.toBool(false);
     };
     bool splitChanged = false;
+    if (state.contains(QStringLiteral("split_mode"))) {
+        const QString mode = state.value(QStringLiteral("split_mode")).toString();
+        const QString normalized = (mode == QStringLiteral("off") || mode == QStringLiteral("on") || mode == QStringLiteral("auto"))
+            ? mode : QString();
+        if (m_splitMode != normalized) {
+            m_splitMode = normalized;
+            splitChanged = true;
+        }
+    }
     if (state.contains(QStringLiteral("frames_per_folder"))) {
         const QJsonValue raw = state.value(QStringLiteral("frames_per_folder"));
         const int perFolder = qMax(0, raw.isString() ? raw.toString().trimmed().toInt() : raw.toInt(0));

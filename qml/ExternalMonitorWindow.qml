@@ -1647,7 +1647,7 @@ Window {
                 color: "#38000000"
                 border.width: 1
                 border.color: (root.recordingActive && root.recordAudioEnabled && root.audioInputAvailable
-                               && (!settingsBridge || settingsBridge.audioRecordedOutlineEnabled)) ? "#73fb2c36"
+                               && !!settingsBridge && settingsBridge.audioRecordedOutlineEnabled) ? "#73fb2c36"
                               : (root.inputVolumeLevel <= 0 ? "#664a2f2f" : "#26ffffff")
                 layer.enabled: visible
                 layer.smooth: true
@@ -1891,7 +1891,7 @@ Window {
                 Text {
                     id: timecodeText
                     text: root.timecode
-                    color: root.recordingActive && (!settingsBridge || settingsBridge.recordingRedTimecodeEnabled) ? "#ff4d4d" : "white"
+                    color: root.recordingActive && !!settingsBridge && settingsBridge.recordingRedTimecodeSet && settingsBridge.recordingRedTimecodeEnabled ? "#ff4d4d" : "white"
                     font.family: interBold.font.family
                     font.pixelSize: 42
                     style: Text.Outline
