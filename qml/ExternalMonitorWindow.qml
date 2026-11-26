@@ -203,6 +203,50 @@ Window {
     readonly property string externalStatusLabel: externalPreroll ? "PRE-ROLL"
                                                                   : externalNoMedia ? "NO MEDIA"
                                                                   : (root.timelapseActive ? "TIMELAPSE" : (root.pillRecordingActive ? "REC" : apertarControlBridge && apertarControlBridge.mediaWritesPending && !apertarControlBridge.bufferSafetyStop ? "WRITING" : "READY"))
+    // Pinefeat CEF168 lens line (read only), shown under the top HUD row. The formatting repeats CameraPage's lensReadout
+    // (a shared QML file would need qrc/CMake changes). Empty without the adapter.
+    readonly property var lensBridge: apertarControlBridge
+    readonly property bool lensKnown: !!lensBridge && lensBridge.lensPresent
+    function lensMetres(cm) {
+        const m = cm / 100
+        return (m < 1 ? m.toFixed(2) : m.toFixed(1)) + " m"
+    }
+    function lensMm(v) { return Math.round(v).toString() }
+    readonly property string lensFText: {
+        const f = lensKnown ? lensBridge.lensIris : 0
+        if (!(f > 0))
+            return ""
+        return "f/" + (Math.abs(f - Math.round(f)) < 0.05 ? Math.round(f).toString() : f.toFixed(1))
+    }
+    readonly property string lensFocalText: {
+        if (!lensKnown)
+            return ""
+        const focal = lensBridge.lensFocalLength
+        const lo = lensBridge.lensFocalMin
+        const hi = lensBridge.lensFocalMax
+        const range = lo > 0 && hi > lo ? lensMm(lo) + "\u2013" + lensMm(hi) + " mm" : ""
+        if (focal > 0)
+            return lensMm(focal) + " mm" + (range !== "" ? " (" + range + ")" : "")
+        return range
+    }
+    readonly property string lensDistanceText: {
+        if (!lensKnown || !lensBridge.lensShowFocusDistance)
+            return ""
+        const lo = lensBridge.lensDistanceMinCm
+        const hi = lensBridge.lensDistanceMaxCm
+        if (lensBridge.lensDistanceInfinity)
+            return lo > 0 ? lensMetres(lo) + "\u2013\u221e" : "\u221e"
+        if (!(lo > 0))
+            return ""
+        const a = lensMetres(lo)
+        if (hi > lo) {
+            const b = lensMetres(hi)
+            if (b !== a)
+                return a.replace(" m", "") + "\u2013" + b
+        }
+        return a
+    }
+    readonly property string lensLineText: [lensFText, lensFocalText, lensDistanceText].filter(t => t !== "").join("   ")
     readonly property var topMonitorInfoItems: [
         { label: "FORMAT", value: root.overlayFormatValue },
         { label: "FPS", value: root.overlayFpsValue, cameraSet: root.overlayCam1 ? false : (!!apertarControlBridge && apertarControlBridge.storagePrerollActive) },
@@ -1538,6 +1582,37 @@ Window {
                 }
             }
         }
+
+            // Pinefeat lens line: f-stop, focal length (range) and, when switched on in the WebUI, the focus distance.
+            // Centred right under the top HUD row; hidden with the HUD and without the adapter.
+            Item {
+                visible: root.lensLineText !== ""
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: topInfoRow.height + 8
+                width: lensLineValue.implicitWidth + root.hudShadowOffset
+                height: lensLineValue.implicitHeight + root.hudShadowOffset
+
+                Text {
+                    x: root.hudShadowOffset
+                    y: root.hudShadowOffset
+                    text: root.lensLineText
+                    color: root.hudShadowColor
+                    font.family: interBold.font.family
+                    font.pixelSize: 26
+                    renderType: Text.NativeRendering
+                }
+
+                Text {
+                    id: lensLineValue
+                    text: root.lensLineText
+                    color: "white"
+                    font.family: interBold.font.family
+                    font.pixelSize: 26
+                    style: Text.Outline
+                    styleColor: "#a0000000"
+                    renderType: Text.NativeRendering
+                }
+            }
 
             // Camera badge: names the main camera's picture whenever cam1 is configured. A Both view's pane
             // tags name the cameras, so the badge is off there. Photo and timelapse show cam0 tagged.
