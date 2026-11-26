@@ -113,6 +113,45 @@ Item {
     readonly property int topControlRadius: largeLandscapeLayout ? 28 : 22
     readonly property int topSettingsButtonSize: rectangularLayout ? (largeLandscapeLayout ? 92 : (standardLandscapeLayout ? 74 : (compactLandscapeLayout ? 56 : (compactPortraitLayout ? 62 : 70)))) : 76
     readonly property int topSettingsIconSize: largeLandscapeLayout ? 42 : (standardLandscapeLayout ? 34 : 28)
+    // Pinefeat lens cells of the top row (read only): IRIS and FOCUS sit between SHUTTER and WB.
+    readonly property bool lensKnown: !!controlBridge && controlBridge.lensPresent
+    readonly property string lensIrisText: {
+        const f = lensKnown ? controlBridge.lensIris : 0
+        if (!(f > 0))
+            return ""
+        return "f/" + (Math.abs(f - Math.round(f)) < 0.05 ? Math.round(f).toString() : f.toFixed(1))
+    }
+    function lensMetres(cm) {
+        const m = cm / 100
+        return (m < 1 ? m.toFixed(2) : m.toFixed(1)) + " m"
+    }
+    // Focus distance, only when the WebUI Lens pane switch is on: "0.35 m", "0.35\u20130.41 m", "2.2 m\u2013\u221e", "\u221e".
+    readonly property string lensFocusText: {
+        if (!lensKnown || !controlBridge.lensShowFocusDistance)
+            return ""
+        const lo = controlBridge.lensDistanceMinCm
+        const hi = controlBridge.lensDistanceMaxCm
+        if (controlBridge.lensDistanceInfinity)
+            return lo > 0 ? lensMetres(lo) + "\u2013\u221e" : "\u221e"
+        if (!(lo > 0))
+            return ""
+        const a = lensMetres(lo)
+        if (hi > lo) {
+            const b = lensMetres(hi)
+            if (b !== a)
+                return a.replace(" m", "") + "\u2013" + b
+        }
+        return a
+    }
+    // FPS, ISO, SHUTTER, [IRIS], [FOCUS], WB: 4 cells without the adapter, as before.
+    readonly property int topCellCount: 4 + (lensIrisText !== "" ? 1 : 0) + (lensFocusText !== "" ? 1 : 0)
+    function topCellKind(index) {
+        if (index < 3)
+            return ["fps", "iso", "shutter"][index]
+        if (index === topCellCount - 1)
+            return "wb"
+        return index === 3 && lensIrisText !== "" ? "iris" : "focus"
+    }
     readonly property int topValueFontSize: rectangularLayout ? (largeLandscapeLayout ? 37 : (standardLandscapeLayout ? 29 : (compactLandscapeLayout ? 19 : (compactPortraitLayout ? 21 : 23)))) : 25
     readonly property int topLabelFontSize: largeLandscapeLayout ? 16 : (standardLandscapeLayout ? 13 : (compactLandscapeLayout ? 11 : 13))
     readonly property int topArrowFontSize: largeLandscapeLayout ? 25 : (standardLandscapeLayout ? 20 : (compactLandscapeLayout ? 16 : 18))
@@ -2741,78 +2780,30 @@ Timer {
             renderType: Text.NativeRendering
         }
 
-        // Pinefeat CEF168 lens readout (read only): f-stop and focal length from Core's lens state. Hidden without the adapter.
+        // Pinefeat CEF168 lens readout (read only): focal length and zoom range. IRIS and FOCUS are cells of the top row.
         Row {
             id: lensReadout
             readonly property var lensBridge: root.controlBridge
             readonly property bool lensKnown: !!lensBridge && lensBridge.lensPresent
-            readonly property real fNumber: lensKnown ? lensBridge.lensIris : 0
             readonly property real focal: lensKnown ? lensBridge.lensFocalLength : 0
             readonly property real focalMin: lensKnown ? lensBridge.lensFocalMin : 0
             readonly property real focalMax: lensKnown ? lensBridge.lensFocalMax : 0
             function mm(v) { return Math.round(v).toString() }
-            readonly property string fText: fNumber > 0
-                ? "f/" + (Math.abs(fNumber - Math.round(fNumber)) < 0.05 ? Math.round(fNumber).toString() : fNumber.toFixed(1))
-                : ""
             readonly property bool hasRange: focalMin > 0 && focalMax > focalMin
             readonly property string rangeLabel: hasRange ? mm(focalMin) + "\u2013" + mm(focalMax) + " mm" : ""
             // Current focal length when known, else the zoom range; with both, the range stays as smaller secondary text.
             readonly property string focalText: focal > 0 ? mm(focal) + " mm" : rangeLabel
             readonly property string rangeText: focal > 0 ? rangeLabel : ""
-            // Focus distance, only when the WebUI Lens pane switch is on: metres, 2 decimals below 1 m, else 1.
-            readonly property real distMinCm: lensKnown ? lensBridge.lensDistanceMinCm : 0
-            readonly property real distMaxCm: lensKnown ? lensBridge.lensDistanceMaxCm : 0
-            readonly property bool distInf: lensKnown && lensBridge.lensDistanceInfinity
-            function metres(cm) {
-                const m = cm / 100
-                return (m < 1 ? m.toFixed(2) : m.toFixed(1)) + " m"
-            }
-            readonly property string distText: {
-                if (!lensKnown || !lensBridge.lensShowFocusDistance)
-                    return ""
-                if (distInf)
-                    return distMinCm > 0 ? metres(distMinCm) + "\u2013\u221e" : "\u221e"
-                if (!(distMinCm > 0))
-                    return ""
-                const lo = metres(distMinCm)
-                if (distMaxCm > distMinCm) {
-                    const hi = metres(distMaxCm)
-                    if (hi !== lo)
-                        return lo.replace(" m", "") + "\u2013" + hi
-                }
-                return lo
-            }
             z: 20
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: parent.top
             anchors.topMargin: root.rectangularLayout ? (root.topControlsTopMargin + root.topStatHeight + 16) : 16
             spacing: 12
-            visible: lensKnown && (fText !== "" || focalText !== "" || distText !== "")
+            visible: lensKnown && focalText !== ""
             opacity: root.effectiveControlsOpacity
 
             Text {
-                visible: lensReadout.fText !== ""
-                text: lensReadout.fText
-                color: "white"
-                font.family: interMedium.font.family
-                font.pixelSize: root.photoStatusChipFontSize + 4
-                style: Text.Outline
-                styleColor: "#a0000000"
-                renderType: Text.NativeRendering
-            }
-            Text {
-                visible: lensReadout.focalText !== ""
                 text: lensReadout.focalText
-                color: "white"
-                font.family: interMedium.font.family
-                font.pixelSize: root.photoStatusChipFontSize + 4
-                style: Text.Outline
-                styleColor: "#a0000000"
-                renderType: Text.NativeRendering
-            }
-            Text {
-                visible: lensReadout.distText !== ""
-                text: lensReadout.distText
                 color: "white"
                 font.family: interMedium.font.family
                 font.pixelSize: root.photoStatusChipFontSize + 4
@@ -3048,12 +3039,12 @@ Timer {
             spacing: root.topControlsSpacing
 
             Repeater {
-                model: 4
+                model: root.topCellCount
 
 	                delegate: Rectangle {
 
-                    opacity: index === 3 && !root.whiteBalanceAvailable ? 0.4 : 1.0
-	                    width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * 4)) / 4
+                    opacity: root.topCellKind(index) === "wb" && !root.whiteBalanceAvailable ? 0.4 : 1.0
+	                    width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * root.topCellCount)) / root.topCellCount
 	                    height: root.topStatHeight
 	                    radius: root.topControlRadius
                     color: root.compactControlColor(index === 0 ? "#1affffff" : "#14ffffff",
@@ -3066,7 +3057,7 @@ Timer {
                     readonly property bool dropdownOpen: (index === 0 && root.openDropdown === "fps")
                                                          || (index === 1 && root.openDropdown === "iso")
                                                          || (index === 2 && root.openDropdown === "shutter")
-                                                         || (index === 3 && root.openDropdown === "wb")
+                                                         || (root.topCellKind(index) === "wb" && root.openDropdown === "wb")
 
                     Text {
     id: menuLabel
@@ -3074,10 +3065,7 @@ Timer {
     anchors.top: parent.top
     anchors.leftMargin: 16
     anchors.topMargin: 12
-    text: index === 0 ? "FPS"
-         : index === 1 ? "ISO"
-         : index === 2 ? "SHUTTER"
-         : "WB"
+    text: ({ fps: "FPS", iso: "ISO", shutter: "SHUTTER", iris: "IRIS", focus: "FOCUS", wb: "WB" })[root.topCellKind(index)]
     color: "#99ffffff"
     font.family: interLight.font.family
     font.pixelSize: root.topLabelFontSize
@@ -3164,7 +3152,7 @@ Text {
             spacing: root.topControlsSpacing
 
             TopDropdownStat {
-                width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * 4)) / 4
+                width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * root.topCellCount)) / root.topCellCount
                 height: root.topStatHeight
                 valueFontSize: root.topValueFontSize
                 backgroundOpacity: root.effectiveControlsOpacity
@@ -3200,7 +3188,7 @@ Text {
             }
 
             TopDropdownStat {
-                width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * 4)) / 4
+                width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * root.topCellCount)) / root.topCellCount
                 height: root.topStatHeight
                 valueFontSize: root.topValueFontSize
                 backgroundOpacity: root.effectiveControlsOpacity
@@ -3234,7 +3222,7 @@ Text {
             }
 
             TopDropdownStat {
-                width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * 4)) / 4
+                width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * root.topCellCount)) / root.topCellCount
                 height: root.topStatHeight
                 valueFontSize: root.topValueFontSize
                 backgroundOpacity: root.effectiveControlsOpacity
@@ -3274,8 +3262,30 @@ Text {
                 }
             }
 
+            // IRIS: read only (set from the WebUI, pots and encoders); a tap does nothing.
             TopDropdownStat {
-                width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * 4)) / 4
+                width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * root.topCellCount)) / root.topCellCount
+                height: root.topStatHeight
+                valueFontSize: root.topValueFontSize
+                backgroundOpacity: root.effectiveControlsOpacity
+                fitValue: true
+                visible: root.lensIrisText !== ""
+                value: root.lensIrisText
+            }
+
+            // FOCUS: read only (set from the WebUI, pots and encoders); a tap does nothing.
+            TopDropdownStat {
+                width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * root.topCellCount)) / root.topCellCount
+                height: root.topStatHeight
+                valueFontSize: root.topValueFontSize
+                backgroundOpacity: root.effectiveControlsOpacity
+                fitValue: true
+                visible: root.lensFocusText !== ""
+                value: root.lensFocusText
+            }
+
+            TopDropdownStat {
+                width: (parent.width - root.topSettingsButtonSize - (root.topControlsSpacing * root.topCellCount)) / root.topCellCount
                 height: root.topStatHeight
                 valueFontSize: root.topValueFontSize
                 backgroundOpacity: root.effectiveControlsOpacity

@@ -8,6 +8,8 @@ Item {
     property string value: ""
     // Shown instead of value when set (e.g. the ISO auto is using); value stays the selection.
     property string displayValue: ""
+    // Shrink the value to the cell (read-only cells with a long text, e.g. a focus distance range).
+    property bool fitValue: false
     property bool valueItalic: false     // set by the camera, not the operator (T33)
     property bool isOpen: false
     property var options: []
@@ -39,6 +41,9 @@ Item {
         font.italic: root.valueItalic
         font.family: interRegular.font.family
         font.pixelSize: root.valueFontSize
+        width: root.fitValue ? root.width - 28 : implicitWidth
+        fontSizeMode: root.fitValue ? Text.HorizontalFit : Text.FixedSize
+        minimumPixelSize: 9
         renderType: Text.NativeRendering
     }
 

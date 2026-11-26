@@ -203,7 +203,7 @@ Window {
     readonly property string externalStatusLabel: externalPreroll ? "PRE-ROLL"
                                                                   : externalNoMedia ? "NO MEDIA"
                                                                   : (root.timelapseActive ? "TIMELAPSE" : (root.pillRecordingActive ? "REC" : apertarControlBridge && apertarControlBridge.mediaWritesPending && !apertarControlBridge.bufferSafetyStop ? "WRITING" : "READY"))
-    // Pinefeat CEF168 lens line (read only), shown under the top HUD row. The formatting repeats CameraPage's lensReadout
+    // Pinefeat CEF168 lens values (read only): IRIS and FOCUS in the top HUD row, focal length in a line under it. The formatting repeats CameraPage's lensReadout
     // (a shared QML file would need qrc/CMake changes). Empty without the adapter.
     readonly property var lensBridge: apertarControlBridge
     readonly property bool lensKnown: !!lensBridge && lensBridge.lensPresent
@@ -246,14 +246,18 @@ Window {
         }
         return a
     }
-    readonly property string lensLineText: [lensFText, lensFocalText, lensDistanceText].filter(t => t !== "").join("   ")
+    // The line under the HUD keeps the focal length and zoom range; IRIS and FOCUS are items of the top row.
+    readonly property string lensLineText: lensFocalText
     readonly property var topMonitorInfoItems: [
         { label: "FORMAT", value: root.overlayFormatValue },
         { label: "FPS", value: root.overlayFpsValue, cameraSet: root.overlayCam1 ? false : (!!apertarControlBridge && apertarControlBridge.storagePrerollActive) },
         { label: "ISO", value: root.overlayIsoValue, cameraSet: root.overlayCam1 ? root.cam1IsoSetByCamera : ((!!apertarControlBridge && apertarControlBridge.isoSetByCamera) || root.isoOnAddedCap) },
-        { label: "SHUTTER", value: root.overlayShutterValue, cameraSet: root.overlayCam1 ? root.cam1ShutterSetByCamera : (!!apertarControlBridge && apertarControlBridge.shutterSetByCamera) },
+        { label: "SHUTTER", value: root.overlayShutterValue, cameraSet: root.overlayCam1 ? root.cam1ShutterSetByCamera : (!!apertarControlBridge && apertarControlBridge.shutterSetByCamera) }
+    ].concat(root.lensFText !== "" ? [{ label: "IRIS", value: root.lensFText }] : [],
+             root.lensDistanceText !== "" ? [{ label: "FOCUS", value: root.lensDistanceText }] : [],
+             [
         { label: "WB", value: root.overlayWbValue, cameraSet: root.overlayCam1 ? root.cam1WbSetByCamera : (!!apertarControlBridge && apertarControlBridge.whiteBalanceSetByCamera) }
-    ]
+    ])
 
     // ---- Dual sensor views (T66) ----
     // The cam1 preview client exists only in the normal process; the monitor-only one shows cam0.
@@ -735,22 +739,31 @@ Window {
         externalPhotoCaptureFeedbackAnimation.restart()
     }
 
+    // The first and last items keep the wide slots at the row's ends. The middle items (3 to 5) are spread evenly,
+    // `step` of the row width apart around the centre: 3 items give today's 0.29 / 0.50 / 0.71. The slot is never wider
+    // than the step, so neighbours do not overlap (5 middle items at 1848 px: step 244 px, slot 231 px).
+    function topHudStep(count) {
+        return Math.min(0.21, 0.66 / Math.max(1, count - 2))
+    }
+
     function topHudSlotWidth(index, rowWidth) {
         if (index === 0 || index === root.topMonitorInfoItems.length - 1)
             return Math.max(220, rowWidth * 0.17)
 
-        return Math.max(160, rowWidth * 0.125)
+        return Math.min(Math.max(160, rowWidth * 0.125),
+                        rowWidth * root.topHudStep(root.topMonitorInfoItems.length))
     }
 
     function topHudX(index, rowWidth) {
         var slotWidth = root.topHudSlotWidth(index, rowWidth)
         if (index === 0)
             return 0
-        if (index === root.topMonitorInfoItems.length - 1)
+        var count = root.topMonitorInfoItems.length
+        if (index === count - 1)
             return rowWidth - slotWidth
 
-        var positions = [0.29, 0.50, 0.71]
-        return (rowWidth * positions[index - 1]) - (slotWidth / 2)
+        var centre = 0.5 + ((index - 1) - ((count - 3) / 2)) * root.topHudStep(count)
+        return (rowWidth * centre) - (slotWidth / 2)
     }
 
     function updateHorizontalLevelPolling() {
@@ -1583,7 +1596,7 @@ Window {
             }
         }
 
-            // Pinefeat lens line: f-stop, focal length (range) and, when switched on in the WebUI, the focus distance.
+            // Pinefeat lens line: focal length and zoom range (IRIS and FOCUS are in the top row).
             // Centred right under the top HUD row; hidden with the HUD and without the adapter.
             Item {
                 visible: root.lensLineText !== ""
