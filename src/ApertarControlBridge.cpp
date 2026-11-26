@@ -1065,7 +1065,7 @@ void ApertarControlBridge::updateRefreshTimer()
         || !m_connected;
     m_retryTimer.setInterval(needsFastPolling
                              ? kReconnectPollIntervalMs
-                             : (m_isoAuto || m_whiteBalanceAuto || m_cam1Present ? kLiveValuePollIntervalMs : kSteadyStatePollIntervalMs));
+                             : (m_isoAuto || m_whiteBalanceAuto || m_cam1Present || (m_lensPresent && m_lensShowFocusDistance) ? kLiveValuePollIntervalMs : kSteadyStatePollIntervalMs));
 }
 
 void ApertarControlBridge::loadPersistedCameraSettings()
@@ -1399,6 +1399,17 @@ void ApertarControlBridge::applyCoreMessage(const QJsonObject &message)
         applyCoreState(message);
         return;
     }
+    if (event == QStringLiteral("lens")) {
+        // Lens values changed: re-read get_state, at most about 4 times a second.
+        if (!m_lensRefreshQueued) {
+            m_lensRefreshQueued = true;
+            QTimer::singleShot(250, this, [this]() {
+                m_lensRefreshQueued = false;
+                refreshFromCore();
+            });
+        }
+        return;
+    }
     if (event == QStringLiteral("audio_level")) {
         setAudioInputLevel(message.value(QStringLiteral("input_level")).toInt(0));
         return;
@@ -1484,6 +1495,72 @@ void ApertarControlBridge::setCoreMediaState(const QString &state, bool alive)
     m_coreMediaState = state;
     m_coreMediaAlive = alive;
     emit coreMediaStateChanged(state, alive);
+}
+
+void ApertarControlBridge::applyLensState(const QJsonObject &state)
+{
+    if (!state.value(QStringLiteral("lens")).isObject())
+        return;
+    const QJsonObject lens = state.value(QStringLiteral("lens")).toObject();
+    // Missing or null numbers mean unknown (0).
+    const auto num = [&lens](const char *key) {
+        const QJsonValue v = lens.value(QLatin1String(key));
+        return v.isDouble() ? v.toDouble() : 0.0;
+    };
+    const bool present = lens.value(QStringLiteral("present")).toBool(false);
+    const QString lensState = lens.value(QStringLiteral("state")).toString();
+    const QString name = lens.value(QStringLiteral("lens_name")).toString();
+    const double iris = num("iris");
+    const double apMin = num("aperture_min");
+    const double apMax = num("aperture_max");
+    const double focal = num("focal_length_mm");
+    const double focalMin = num("focal_min_mm");
+    const double focalMax = num("focal_max_mm");
+    const bool serial = lens.value(QStringLiteral("serial_connected")).toBool(false);
+    const double distMin = num("distance_min_cm");
+    const double distMax = num("distance_max_cm");
+    const bool distInf = lens.value(QStringLiteral("distance_infinity")).toBool(false);
+    const bool showDist = lens.value(QStringLiteral("show_focus_distance")).toBool(false);
+    if (distMin == m_lensDistanceMinCm && distMax == m_lensDistanceMaxCm && distInf == m_lensDistanceInfinity
+        && showDist == m_lensShowFocusDistance
+        && present == m_lensPresent && lensState == m_lensState && name == m_lensName
+        && iris == m_lensIris && apMin == m_lensApertureMin && apMax == m_lensApertureMax
+        && focal == m_lensFocalLength && focalMin == m_lensFocalMin && focalMax == m_lensFocalMax
+        && serial == m_lensSerialConnected)
+        return;
+    m_lensPresent = present;
+    m_lensState = lensState;
+    m_lensName = name;
+    m_lensIris = iris;
+    m_lensApertureMin = apMin;
+    m_lensApertureMax = apMax;
+    m_lensFocalLength = focal;
+    m_lensFocalMin = focalMin;
+    m_lensFocalMax = focalMax;
+    m_lensSerialConnected = serial;
+    m_lensDistanceMinCm = distMin;
+    m_lensDistanceMaxCm = distMax;
+    m_lensDistanceInfinity = distInf;
+    m_lensShowFocusDistance = showDist;
+    emit lensChanged();
+    updateRefreshTimer();
+}
+
+void ApertarControlBridge::clearLensState()
+{
+    if (!m_lensPresent && m_lensState.isEmpty())
+        return;
+    m_lensPresent = false;
+    m_lensState.clear();
+    m_lensName.clear();
+    m_lensIris = m_lensApertureMin = m_lensApertureMax = 0.0;
+    m_lensFocalLength = m_lensFocalMin = m_lensFocalMax = 0.0;
+    m_lensSerialConnected = false;
+    m_lensDistanceMinCm = m_lensDistanceMaxCm = 0.0;
+    m_lensDistanceInfinity = false;
+    m_lensShowFocusDistance = false;
+    emit lensChanged();
+    updateRefreshTimer();
 }
 
 void ApertarControlBridge::applyCam1State(const QJsonObject &state)
@@ -1656,6 +1733,7 @@ void ApertarControlBridge::applyCoreState(const QJsonObject &state)
         }
     }
     applyRecordingDroppedFrames(state);
+    applyLensState(state);
     applyCam1State(state);
     if (state.contains(QStringLiteral("recording_error"))) {
         const auto recordingError = state.value(QStringLiteral("recording_error")).toString();
@@ -2067,6 +2145,9 @@ void ApertarControlBridge::processEventSocketMessages()
         if (isStateReply && message.value(QStringLiteral("ok")).toBool(false)
             && !message.contains(QStringLiteral("cam1")))
             clearCam1State();
+        if (isStateReply && message.value(QStringLiteral("ok")).toBool(false)
+            && !message.contains(QStringLiteral("lens")))
+            clearLensState();
     }
 }
 

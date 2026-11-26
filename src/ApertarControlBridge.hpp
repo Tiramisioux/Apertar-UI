@@ -62,6 +62,21 @@ class ApertarControlBridge : public QObject
     Q_PROPERTY(QString autofocusWindow READ autofocusWindow NOTIFY autofocusWindowChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
     // The second sensor (T65): present only when Core's get_state carries a cam1 object.
+    // Pinefeat CEF168 lens adapter: get_state carries a lens object. 0 / empty = unknown.
+    Q_PROPERTY(bool lensPresent READ lensPresent NOTIFY lensChanged)
+    Q_PROPERTY(QString lensState READ lensState NOTIFY lensChanged)
+    Q_PROPERTY(QString lensName READ lensName NOTIFY lensChanged)
+    Q_PROPERTY(double lensIris READ lensIris NOTIFY lensChanged)
+    Q_PROPERTY(double lensApertureMin READ lensApertureMin NOTIFY lensChanged)
+    Q_PROPERTY(double lensApertureMax READ lensApertureMax NOTIFY lensChanged)
+    Q_PROPERTY(double lensFocalLength READ lensFocalLength NOTIFY lensChanged)
+    Q_PROPERTY(double lensFocalMin READ lensFocalMin NOTIFY lensChanged)
+    Q_PROPERTY(double lensFocalMax READ lensFocalMax NOTIFY lensChanged)
+    Q_PROPERTY(bool lensSerialConnected READ lensSerialConnected NOTIFY lensChanged)
+    Q_PROPERTY(double lensDistanceMinCm READ lensDistanceMinCm NOTIFY lensChanged)
+    Q_PROPERTY(double lensDistanceMaxCm READ lensDistanceMaxCm NOTIFY lensChanged)
+    Q_PROPERTY(bool lensDistanceInfinity READ lensDistanceInfinity NOTIFY lensChanged)
+    Q_PROPERTY(bool lensShowFocusDistance READ lensShowFocusDistance NOTIFY lensChanged)
     Q_PROPERTY(bool cam1Present READ cam1Present NOTIFY cam1PresentChanged)
     Q_PROPERTY(QString cam1State READ cam1State NOTIFY cam1Changed)
     Q_PROPERTY(QString cam1Message READ cam1Message NOTIFY cam1Changed)
@@ -155,6 +170,20 @@ public:
     QString proresColorProfile() const { return m_proresColorProfile; }
     QString cdngPreviewColorProfile() const { return m_cdngPreviewColorProfile; }
     QVariantMap previewExposureReference() const { return m_previewExposureReference; }
+    bool lensPresent() const { return m_lensPresent; }
+    QString lensState() const { return m_lensState; }
+    QString lensName() const { return m_lensName; }
+    double lensIris() const { return m_lensIris; }
+    double lensApertureMin() const { return m_lensApertureMin; }
+    double lensApertureMax() const { return m_lensApertureMax; }
+    double lensFocalLength() const { return m_lensFocalLength; }
+    double lensFocalMin() const { return m_lensFocalMin; }
+    double lensFocalMax() const { return m_lensFocalMax; }
+    bool lensSerialConnected() const { return m_lensSerialConnected; }
+    double lensDistanceMinCm() const { return m_lensDistanceMinCm; }
+    double lensDistanceMaxCm() const { return m_lensDistanceMaxCm; }
+    bool lensDistanceInfinity() const { return m_lensDistanceInfinity; }
+    bool lensShowFocusDistance() const { return m_lensShowFocusDistance; }
     bool cam1Present() const { return m_cam1Present; }
     QString cam1State() const { return m_cam1State; }
     QString cam1Message() const { return m_cam1Message; }
@@ -298,6 +327,7 @@ signals:
     void proresColorProfileChanged();
     void cdngPreviewColorProfileChanged();
     void previewExposureReferenceChanged();
+    void lensChanged();
     void cam1PresentChanged();
     void cam1Changed();
     void cam1SettingsChanged();
@@ -370,6 +400,8 @@ private:
                          QJsonObject *replyObject = nullptr);
     void applyCoreMessage(const QJsonObject &message);
     void applyCoreState(const QJsonObject &state);
+    void applyLensState(const QJsonObject &state);
+    void clearLensState();
     void applyCam1State(const QJsonObject &state);
     void clearCam1State();
     void updateCameraRates();
@@ -467,6 +499,21 @@ private:
     QString m_proresColorProfile = QStringLiteral("standard");
     QString m_cdngPreviewColorProfile = QStringLiteral("standard");
     QVariantMap m_previewExposureReference;
+    bool m_lensPresent = false;
+    QString m_lensState;
+    QString m_lensName;
+    double m_lensIris = 0.0;
+    double m_lensApertureMin = 0.0;
+    double m_lensApertureMax = 0.0;
+    double m_lensFocalLength = 0.0;
+    double m_lensFocalMin = 0.0;
+    double m_lensFocalMax = 0.0;
+    bool m_lensSerialConnected = false;
+    double m_lensDistanceMinCm = 0.0;
+    double m_lensDistanceMaxCm = 0.0;
+    bool m_lensDistanceInfinity = false;
+    bool m_lensShowFocusDistance = false;
+    bool m_lensRefreshQueued = false;
     bool m_cam1Present = false;
     QString m_cam1State;
     QString m_cam1Message;

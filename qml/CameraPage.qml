@@ -2741,6 +2741,97 @@ Timer {
             renderType: Text.NativeRendering
         }
 
+        // Pinefeat CEF168 lens readout (read only): f-stop and focal length from Core's lens state. Hidden without the adapter.
+        Row {
+            id: lensReadout
+            readonly property var lensBridge: root.controlBridge
+            readonly property bool lensKnown: !!lensBridge && lensBridge.lensPresent
+            readonly property real fNumber: lensKnown ? lensBridge.lensIris : 0
+            readonly property real focal: lensKnown ? lensBridge.lensFocalLength : 0
+            readonly property real focalMin: lensKnown ? lensBridge.lensFocalMin : 0
+            readonly property real focalMax: lensKnown ? lensBridge.lensFocalMax : 0
+            function mm(v) { return Math.round(v).toString() }
+            readonly property string fText: fNumber > 0
+                ? "f/" + (Math.abs(fNumber - Math.round(fNumber)) < 0.05 ? Math.round(fNumber).toString() : fNumber.toFixed(1))
+                : ""
+            readonly property bool hasRange: focalMin > 0 && focalMax > focalMin
+            readonly property string rangeLabel: hasRange ? mm(focalMin) + "\u2013" + mm(focalMax) + " mm" : ""
+            // Current focal length when known, else the zoom range; with both, the range stays as smaller secondary text.
+            readonly property string focalText: focal > 0 ? mm(focal) + " mm" : rangeLabel
+            readonly property string rangeText: focal > 0 ? rangeLabel : ""
+            // Focus distance, only when the WebUI Lens pane switch is on: metres, 2 decimals below 1 m, else 1.
+            readonly property real distMinCm: lensKnown ? lensBridge.lensDistanceMinCm : 0
+            readonly property real distMaxCm: lensKnown ? lensBridge.lensDistanceMaxCm : 0
+            readonly property bool distInf: lensKnown && lensBridge.lensDistanceInfinity
+            function metres(cm) {
+                const m = cm / 100
+                return (m < 1 ? m.toFixed(2) : m.toFixed(1)) + " m"
+            }
+            readonly property string distText: {
+                if (!lensKnown || !lensBridge.lensShowFocusDistance)
+                    return ""
+                if (distInf)
+                    return distMinCm > 0 ? metres(distMinCm) + "\u2013\u221e" : "\u221e"
+                if (!(distMinCm > 0))
+                    return ""
+                const lo = metres(distMinCm)
+                if (distMaxCm > distMinCm) {
+                    const hi = metres(distMaxCm)
+                    if (hi !== lo)
+                        return lo.replace(" m", "") + "\u2013" + hi
+                }
+                return lo
+            }
+            z: 20
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: parent.top
+            anchors.topMargin: root.rectangularLayout ? (root.topControlsTopMargin + root.topStatHeight + 16) : 16
+            spacing: 12
+            visible: lensKnown && (fText !== "" || focalText !== "" || distText !== "")
+            opacity: root.effectiveControlsOpacity
+
+            Text {
+                visible: lensReadout.fText !== ""
+                text: lensReadout.fText
+                color: "white"
+                font.family: interMedium.font.family
+                font.pixelSize: root.photoStatusChipFontSize + 4
+                style: Text.Outline
+                styleColor: "#a0000000"
+                renderType: Text.NativeRendering
+            }
+            Text {
+                visible: lensReadout.focalText !== ""
+                text: lensReadout.focalText
+                color: "white"
+                font.family: interMedium.font.family
+                font.pixelSize: root.photoStatusChipFontSize + 4
+                style: Text.Outline
+                styleColor: "#a0000000"
+                renderType: Text.NativeRendering
+            }
+            Text {
+                visible: lensReadout.distText !== ""
+                text: lensReadout.distText
+                color: "white"
+                font.family: interMedium.font.family
+                font.pixelSize: root.photoStatusChipFontSize + 4
+                style: Text.Outline
+                styleColor: "#a0000000"
+                renderType: Text.NativeRendering
+            }
+            Text {
+                visible: lensReadout.rangeText !== ""
+                text: "(" + lensReadout.rangeText + ")"
+                color: "#99ffffff"
+                font.family: interRegular.font.family
+                font.pixelSize: root.photoStatusChipFontSize
+                style: Text.Outline
+                styleColor: "#a0000000"
+                renderType: Text.NativeRendering
+            }
+        }
+
         ControlsWarning {
             z: 20
             anchors.left: captureStatusChip.right
